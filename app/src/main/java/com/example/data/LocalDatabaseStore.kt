@@ -96,7 +96,7 @@ data class PersistedCleaningSnapshot(
 
 /**
 - Capa de persistencia local real basada en SQLite + Cifrado AES-256 GCM (Android KeyStore)
-- sincronizada con Supabase (SupabaseCloudSync).
+- sincronizada en vivo con Supabase (SupabaseCloudSync).
  */
 object LocalDatabaseStore {
 
@@ -147,8 +147,26 @@ object LocalDatabaseStore {
     @Synchronized
     fun init(context: Context) {
         if (dbHelper == null) {
-            dbHelper = TodoservicioSqliteHelper(context.applicationContext)
+            val appCtx = context.applicationContext
+            dbHelper = TodoservicioSqliteHelper(appCtx)
             ensureKeyStoreKey()
+            SupabaseCloudSync.startLiveSync(
+                onOperationalUpdated = {
+                    val json = loadJsonRecord(KEY_OPERATIONAL)
+                    if (!json.isNullOrBlank()) {
+                        try {
+                            val snap = operationalAdapter.fromJson(json)
+                            if (snap != null) OperationalRepository.init(appCtx)
+                        } catch (_: Exception) {}
+                    }
+                },
+                onAuthUpdated = {
+                    try { AuthRepository.init(appCtx) } catch (_: Exception) {}
+                },
+                onCleaningUpdated = {
+                    try { CleaningRepository.init(appCtx) } catch (_: Exception) {}
+                }
+            )
         }
     }
 
