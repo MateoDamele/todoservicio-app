@@ -1,0 +1,32 @@
+{
+  "name": "Todoservicio • Mantenimiento Corporativo",
+  "short_name": "Todoservicio",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#102C54",
+  "theme_color": "#102C54",
+  "orientation": "any",
+  "description": "Plataforma Integral de Facility Management, Operaciones de Mantenimiento y Portal del Cliente Todoservicio Uruguay.",
+  "categories": ["business", "productivity", "utilities"],
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-192-maskable.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

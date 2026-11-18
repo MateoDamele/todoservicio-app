@@ -1,0 +1,2243 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Todoservicio • Plataforma Operativa & Facility Management</title>
+
+  <!-- PWA Metadata & Favicons -->
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#102C54">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="icon" type="image/png" href="/assets/Todoservicio_Icono_T_HD_PerfilWhatsApp_R.png">
+
+  <!-- Google Fonts: Inter & Poppins -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- Leaflet Map Real Street Tiles -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <style>
+    :root {
+      --azul-marca: #102C54;
+      --azul-corp: #1D4E89;
+      --celeste-acento: #4A90D9;
+      --celeste-claro: #EBF4FC;
+      --gris-neutro: #F4F6F9;
+      --gris-tarjeta: #FFFFFF;
+      --gris-texto: #64748B;
+      --gris-borde: #E2E8F0;
+      --verde-exito: #10B981;
+      --amarillo-alerta: #F59E0B;
+      --rojo-error: #EF4444;
+      --sombra-suave: 0 4px 20px rgba(16, 44, 84, 0.05);
+      --sombra-elevada: 0 12px 36px rgba(16, 44, 84, 0.12);
+    }
+
+    /* ELIMINACIÓN TOTAL DE BARRAS DE SCROLL HUÉRFANAS O ROTAS */
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      scrollbar-width: none !important;
+      -ms-overflow-style: none !important;
+    }
+    *::-webkit-scrollbar {
+      display: none !important;
+      width: 0 !important;
+      height: 0 !important;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background-color: var(--gris-neutro);
+      color: #1E293B;
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ==========================================================================
+       1. SPLASH SCREEN: ANIMACIÓN "LOGO REVEAL" INTERACTIVO (1.2 SEGUNDOS)
+       ========================================================================== */
+    #splash-screen {
+      position: fixed;
+      inset: 0;
+      background-color: var(--azul-marca);
+      z-index: 99999;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      transition: opacity 0.4s ease, visibility 0.4s ease;
+    }
+    #splash-screen.hidden {
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+    }
+
+    .splash-content {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+    }
+
+    /* Isotipo "T" escala suave del 85% al 100% con FadeIn */
+    .splash-isotype-box {
+      width: 100px;
+      height: 100px;
+      background: #FFFFFF;
+      border-radius: 26px;
+      padding: 10px;
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      animation: splashIsotypeIn 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+    .splash-isotype-box img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+
+    @keyframes splashIsotypeIn {
+      0% {
+        opacity: 0;
+        transform: scale(0.85);
+      }
+      100% {
+        opacity: 1;
+        transform: scale(1);
+      }
+    }
+
+    /* Palabra "todoservicio" revelación horizontal de izquierda a derecha */
+    .splash-wordmark-container {
+      margin-top: 24px;
+      overflow: hidden;
+      height: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+    }
+    .splash-wordmark-img {
+      height: 38px;
+      object-fit: contain;
+      clip-path: inset(0 100% 0 0);
+      animation: splashRevealWordmark 0.5s cubic-bezier(0.25, 1, 0.5, 1) 0.6s forwards;
+    }
+
+    @keyframes splashRevealWordmark {
+      0% {
+        clip-path: inset(0 100% 0 0);
+        transform: translateX(-15px);
+      }
+      100% {
+        clip-path: inset(0 0% 0 0);
+        transform: translateX(0);
+      }
+    }
+
+    .splash-indicator {
+      margin-top: 30px;
+      width: 36px;
+      height: 4px;
+      background: rgba(255, 255, 255, 0.2);
+      border-radius: 4px;
+      overflow: hidden;
+      position: relative;
+    }
+    .splash-indicator::after {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 0;
+      height: 100%;
+      width: 100%;
+      background: var(--celeste-acento);
+      animation: splashProgress 1.2s ease forwards;
+    }
+    @keyframes splashProgress {
+      0% { width: 0%; }
+      100% { width: 100%; }
+    }
+
+    /* ==========================================================================
+       2. GESTOR DE RUTAS / VISTAS (APP CONTAINER)
+       ========================================================================== */
+    .app-screen {
+      display: none;
+      width: 100%;
+      min-height: 100vh;
+      flex-direction: column;
+    }
+    .app-screen.active {
+      display: flex;
+    }
+
+    /* ==========================================================================
+       3. PANTALLA DE LOGIN POR NOMBRE DE USUARIO (NO CORREO)
+       ========================================================================== */
+    .login-wrapper {
+      min-height: 100vh;
+      background: linear-gradient(145deg, #0A1C36 0%, #102C54 60%, #1D4E89 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: calc(env(safe-area-inset-top, 0px) + 24px) 16px calc(env(safe-area-inset-bottom, 0px) + 24px) 16px;
+      position: relative;
+    }
+
+    .login-card {
+      background: #FFFFFF;
+      width: 100%;
+      max-width: 440px;
+      border-radius: 28px;
+      padding: 34px 28px;
+      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.28);
+      position: relative;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+
+    .login-brand-header {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      margin-bottom: 24px;
+      text-align: center;
+    }
+    .login-logo-box {
+      width: 64px;
+      height: 64px;
+      background: #FFFFFF;
+      border-radius: 18px;
+      padding: 6px;
+      box-shadow: 0 8px 24px rgba(16, 44, 84, 0.15);
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .login-logo-box img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+
+    .login-brand-title {
+      font-family: 'Poppins', sans-serif;
+      font-size: 21px;
+      font-weight: 800;
+      color: var(--azul-marca);
+      letter-spacing: -0.5px;
+    }
+    .login-brand-subtitle {
+      font-size: 13px;
+      color: var(--gris-texto);
+      margin-top: 4px;
+    }
+
+    /* Selector de Rol */
+    .role-selector-bar {
+      display: flex;
+      background: #F1F5F9;
+      padding: 4px;
+      border-radius: 14px;
+      margin-bottom: 22px;
+      gap: 4px;
+    }
+    .role-selector-btn {
+      flex: 1;
+      padding: 9px 4px;
+      border: none;
+      background: transparent;
+      border-radius: 10px;
+      font-size: 11.5px;
+      font-weight: 700;
+      color: var(--gris-texto);
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 5px;
+      text-align: center;
+    }
+    .role-selector-btn.active {
+      background: #FFFFFF;
+      color: var(--azul-marca);
+      box-shadow: 0 3px 10px rgba(0, 0, 0, 0.08);
+    }
+
+    /* Banner de Credenciales Maestras */
+    .master-credentials-banner {
+      background: #F8FAFC;
+      border: 1px dashed #CBD5E1;
+      border-radius: 12px;
+      padding: 10px 14px;
+      margin-bottom: 20px;
+      font-size: 11.5px;
+      color: var(--azul-corp);
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      line-height: 1.4;
+    }
+
+    .form-group {
+      margin-bottom: 18px;
+    }
+    .form-label {
+      display: block;
+      font-size: 12.5px;
+      font-weight: 700;
+      color: var(--azul-marca);
+      margin-bottom: 6px;
+    }
+    .input-icon-wrapper {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+    .input-icon-wrapper i.left-icon {
+      position: absolute;
+      left: 14px;
+      color: #94A3B8;
+      font-size: 15px;
+    }
+    .form-input {
+      width: 100%;
+      padding: 12px 14px 12px 42px;
+      border: 1.5px solid var(--gris-borde);
+      border-radius: 14px;
+      font-size: 13.5px;
+      color: #1E293B;
+      background: #FAFAFC;
+      outline: none;
+      transition: all 0.2s ease;
+      font-family: inherit;
+    }
+    .form-input:focus {
+      border-color: var(--celeste-acento);
+      background: #FFFFFF;
+      box-shadow: 0 0 0 3px rgba(74, 144, 217, 0.18);
+    }
+    .toggle-pass-btn {
+      position: absolute;
+      right: 14px;
+      background: none;
+      border: none;
+      color: #94A3B8;
+      cursor: pointer;
+      font-size: 15px;
+    }
+
+    .btn-login-submit {
+      width: 100%;
+      padding: 14px;
+      background: var(--azul-marca);
+      color: #FFFFFF;
+      border: none;
+      border-radius: 14px;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      box-shadow: 0 8px 20px rgba(16, 44, 84, 0.25);
+      transition: all 0.2s ease;
+      margin-top: 6px;
+    }
+    .btn-login-submit:hover {
+      background: var(--azul-corp);
+      transform: translateY(-1px);
+    }
+
+    .login-error-box {
+      display: none;
+      background: #FEE2E2;
+      border: 1px solid #FCA5A5;
+      color: #991B1B;
+      padding: 10px 14px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 600;
+      margin-bottom: 16px;
+      line-height: 1.4;
+    }
+
+    /* ==========================================================================
+       4. CABECERA UNIFICADA SAFE-AREA (SIN APRETÓN SUPERIOR)
+       ========================================================================== */
+    .unified-safe-header {
+      background: var(--azul-marca);
+      color: #FFFFFF;
+      /* Padding(top: 24.0, bottom: 12.0) estricto de respiración visual */
+      padding: calc(env(safe-area-inset-top, 0px) + 24px) 18px 14px 18px;
+      box-shadow: 0 4px 20px rgba(16, 44, 84, 0.2);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .header-left-col {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .header-isotype-container {
+      width: 44px;
+      height: 44px;
+      background: #FFFFFF;
+      border-radius: 14px;
+      padding: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+      flex-shrink: 0;
+    }
+    .header-isotype-container img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+
+    .header-brand-info {
+      display: flex;
+      flex-direction: column;
+    }
+    .header-app-title {
+      font-family: 'Poppins', sans-serif;
+      font-size: 15px;
+      font-weight: 800;
+      letter-spacing: 0.5px;
+      color: #FFFFFF;
+      line-height: 1.1;
+    }
+    .header-dynamic-sub {
+      font-size: 11.5px;
+      color: #CBD5E1;
+      margin-top: 2px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    /* Selector de sedes estilo Chip interactivo */
+    .chip-sede-selector {
+      background: rgba(255, 255, 255, 0.15);
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      border-radius: 20px;
+      padding: 3px 10px;
+      font-size: 11px;
+      font-weight: 600;
+      color: #FFFFFF;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: background 0.2s;
+    }
+    .chip-sede-selector:hover {
+      background: rgba(255, 255, 255, 0.25);
+    }
+
+    .header-right-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .btn-header-action {
+      background: rgba(255, 255, 255, 0.12);
+      border: 1px solid rgba(255, 255, 255, 0.22);
+      width: 38px;
+      height: 38px;
+      border-radius: 12px;
+      color: #FFFFFF;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      transition: background 0.2s;
+      font-size: 14px;
+    }
+    .btn-header-action:hover {
+      background: rgba(255, 255, 255, 0.22);
+    }
+    .notification-dot {
+      position: absolute;
+      top: 7px;
+      right: 7px;
+      width: 8px;
+      height: 8px;
+      background: var(--rojo-error);
+      border-radius: 50%;
+      border: 1.5px solid var(--azul-marca);
+    }
+
+    /* ==========================================================================
+       5. CONTENIDO GENERAL Y TARJETAS (BORDER-RADIUS 20PX, SIN BORDES NEGROS)
+       ========================================================================== */
+    .main-body-container {
+      flex: 1;
+      padding: 16px 16px 100px 16px;
+      max-width: 960px;
+      width: 100%;
+      margin: 0 auto;
+    }
+
+    .enterprise-card {
+      background: #FFFFFF;
+      border-radius: 20px;
+      border: 1px solid rgba(226, 232, 240, 0.85);
+      box-shadow: var(--sombra-suave);
+      padding: 20px;
+      margin-bottom: 18px;
+      position: relative;
+    }
+    .enterprise-card-title {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 14px;
+      font-family: 'Poppins', sans-serif;
+      font-weight: 700;
+      color: var(--azul-marca);
+      font-size: 15px;
+    }
+
+    /* Tarjeta Viva: Servicio en Curso */
+    .card-live-service {
+      background: var(--azul-marca);
+      color: #FFFFFF;
+      border-left: 4px solid var(--celeste-acento);
+      transition: all 0.3s ease;
+    }
+    .card-live-service.inactive {
+      background: #FFFFFF;
+      color: #1E293B;
+      border-left: 4px solid #CBD5E1;
+    }
+
+    /* Live Pulsing Dot */
+    .live-pulsing-dot {
+      width: 10px;
+      height: 10px;
+      background-color: var(--verde-exito);
+      border-radius: 50%;
+      display: inline-block;
+      position: relative;
+    }
+    .live-pulsing-dot::after {
+      content: '';
+      position: absolute;
+      top: -3px;
+      left: -3px;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background-color: rgba(16, 185, 129, 0.45);
+      animation: pulseAnimation 1.4s infinite ease-out;
+    }
+    @keyframes pulseAnimation {
+      0% { transform: scale(0.8); opacity: 0.8; }
+      100% { transform: scale(2.2); opacity: 0; }
+    }
+
+    .badge-live-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      background: rgba(16, 185, 129, 0.2);
+      border: 1px solid rgba(16, 185, 129, 0.4);
+      color: #34D399;
+      font-size: 11px;
+      font-weight: 800;
+      padding: 4px 10px;
+      border-radius: 20px;
+      letter-spacing: 0.5px;
+    }
+
+    /* ==========================================================================
+       6. MÓDULO ADMIN: GESTIÓN DE CUENTAS Y ACCESOS (RBAC)
+       ========================================================================== */
+    .admin-stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+      gap: 12px;
+      margin-bottom: 18px;
+    }
+    .stat-mini-card {
+      background: #F8FAFC;
+      border: 1px solid var(--gris-borde);
+      border-radius: 16px;
+      padding: 14px;
+      text-align: center;
+    }
+    .stat-number {
+      font-size: 20px;
+      font-weight: 800;
+      color: var(--azul-marca);
+    }
+    .stat-label {
+      font-size: 11px;
+      color: var(--gris-texto);
+      margin-top: 3px;
+      font-weight: 600;
+    }
+
+    .accounts-table-container {
+      overflow-x: auto;
+      border-radius: 14px;
+      border: 1px solid var(--gris-borde);
+      background: #FFFFFF;
+    }
+    .accounts-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12.5px;
+      text-align: left;
+    }
+    .accounts-table th {
+      background: #F8FAFC;
+      padding: 12px 14px;
+      font-weight: 700;
+      color: var(--azul-marca);
+      border-bottom: 1px solid var(--gris-borde);
+      white-space: nowrap;
+    }
+    .accounts-table td {
+      padding: 12px 14px;
+      border-bottom: 1px solid #F1F5F9;
+      color: #334155;
+    }
+    .accounts-table tr:last-child td {
+      border-bottom: none;
+    }
+
+    /* Chips de Rol */
+    .chip-role {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.3px;
+    }
+    .chip-role.admin {
+      background: #102C54;
+      color: #FFFFFF;
+    }
+    .chip-role.tech {
+      background: #E0F2FE;
+      color: #0369A1;
+    }
+    .chip-role.client {
+      background: #1D4E89;
+      color: #FFFFFF;
+    }
+
+    /* ==========================================================================
+       7. BARRA DE NAVEGACIÓN INFERIOR (BOTTOM NAV)
+       ========================================================================== */
+    .unified-bottom-nav {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 72px;
+      background: #FFFFFF;
+      border-top: 1px solid var(--gris-borde);
+      box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.05);
+      display: flex;
+      align-items: center;
+      justify-content: space-around;
+      padding: 0 10px calc(env(safe-area-inset-bottom, 0px));
+      z-index: 90;
+    }
+    .nav-tab-btn {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      border: none;
+      background: none;
+      color: #94A3B8;
+      cursor: pointer;
+      gap: 3px;
+      transition: color 0.2s;
+    }
+    .nav-tab-btn.active {
+      color: var(--azul-marca);
+    }
+    .nav-tab-btn i {
+      font-size: 18px;
+    }
+    .nav-tab-btn span {
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: 0.5px;
+    }
+
+    /* Botón Central Flotante Circular */
+    .nav-fab-center {
+      width: 52px;
+      height: 52px;
+      background: var(--azul-marca);
+      color: #FFFFFF;
+      border-radius: 50%;
+      border: 3px solid #FFFFFF;
+      box-shadow: 0 6px 16px rgba(16, 44, 84, 0.35);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 22px;
+      cursor: pointer;
+      transform: translateY(-16px);
+      transition: transform 0.2s ease, background 0.2s ease;
+      flex-shrink: 0;
+    }
+    .nav-fab-center:hover {
+      background: var(--azul-corp);
+      transform: translateY(-18px) scale(1.04);
+    }
+
+    /* ==========================================================================
+       8. MODALES Y BOTTOM SHEETS
+       ========================================================================== */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(10, 28, 54, 0.7);
+      backdrop-filter: blur(4px);
+      z-index: 1000;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+    }
+    .modal-overlay.active {
+      display: flex;
+    }
+
+    .modal-box {
+      background: #FFFFFF;
+      width: 100%;
+      max-width: 540px;
+      max-height: 90vh;
+      border-radius: 24px;
+      padding: 24px;
+      overflow-y: auto;
+      box-shadow: var(--sombra-elevada);
+      animation: modalFadeIn 0.25s ease forwards;
+    }
+    @keyframes modalFadeIn {
+      from { opacity: 0; transform: translateY(15px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .btn {
+      padding: 10px 18px;
+      border-radius: 12px;
+      font-weight: 700;
+      font-size: 13px;
+      cursor: pointer;
+      border: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s ease;
+      text-decoration: none;
+    }
+    .btn-primary {
+      background: var(--azul-marca);
+      color: #FFFFFF;
+    }
+    .btn-primary:hover {
+      background: var(--azul-corp);
+    }
+    .btn-accent {
+      background: var(--celeste-acento);
+      color: #FFFFFF;
+    }
+    .btn-accent:hover {
+      background: #3B82F6;
+    }
+    .btn-outline {
+      background: transparent;
+      border: 1.5px solid var(--gris-borde);
+      color: var(--azul-marca);
+    }
+    .btn-outline:hover {
+      background: #F8FAFC;
+    }
+    .btn-success {
+      background: var(--verde-exito);
+      color: #FFFFFF;
+    }
+
+    /* Toast */
+    #toast-notification {
+      position: fixed;
+      bottom: 84px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--azul-marca);
+      color: #FFFFFF;
+      padding: 12px 22px;
+      border-radius: 30px;
+      font-size: 13px;
+      font-weight: 600;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+      z-index: 10000;
+      display: none;
+      align-items: center;
+      gap: 8px;
+      max-width: 90%;
+      text-align: center;
+    }
+
+    /* Hoja A4 Flotante */
+    .a4-floating-sheet {
+      background: #FFFFFF;
+      border: 1px solid var(--gris-borde);
+      border-radius: 16px;
+      padding: 24px;
+      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.1);
+      margin-bottom: 20px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ==========================================================================
+       1. SPLASH SCREEN: "LOGO REVEAL" INTERACTIVO (1.2s ANIMATION)
+       ========================================================================== -->
+  <div id="splash-screen">
+    <div class="splash-content">
+      <div class="splash-isotype-box">
+        <img src="/assets/Todoservicio_Icono_T_HD_PerfilWhatsApp_R.png" alt="Todoservicio Isotipo T">
+      </div>
+      <div class="splash-wordmark-container">
+        <img src="/assets/Todoservicio_Logo_HD.png" alt="todoservicio" class="splash-wordmark-img">
+      </div>
+      <div class="splash-indicator"></div>
+    </div>
+  </div>
+
+  <!-- ==========================================================================
+       2. PANTALLA DE ACCESO (LOGIN) POR NOMBRE DE USUARIO
+       ========================================================================== -->
+  <div class="app-screen" id="screen-login">
+    <div class="login-wrapper">
+      <div class="login-card">
+        
+        <div class="login-brand-header">
+          <div class="login-logo-box">
+            <img src="/assets/Todoservicio_Icono_T_HD_PerfilWhatsApp_R.png" alt="Todoservicio">
+          </div>
+          <h1 class="login-brand-title">TODOSERVICIO</h1>
+          <p class="login-brand-subtitle">Plataforma Operativa & Facility Management</p>
+        </div>
+
+        <!-- Selector de Rol -->
+        <div class="role-selector-bar">
+          <button type="button" class="role-selector-btn" id="role-btn-client" onclick="setLoginRole('client')">
+            <i class="fas fa-building"></i> Cliente
+          </button>
+          <button type="button" class="role-selector-btn" id="role-btn-tech" onclick="setLoginRole('tech')">
+            <i class="fas fa-hard-hat"></i> Técnico
+          </button>
+          <button type="button" class="role-selector-btn active" id="role-btn-admin" onclick="setLoginRole('admin')">
+            <i class="fas fa-shield-alt"></i> Administrador
+          </button>
+        </div>
+
+        <!-- Banner de Credenciales Maestras -->
+        <div class="master-credentials-banner" id="master-cred-banner">
+          <i class="fas fa-key" style="color: var(--celeste-acento); margin-top: 2px;"></i>
+          <div>
+            <strong>Acceso Maestro Central (Admin):</strong><br>
+            Usuario: <code style="color: var(--azul-marca); font-weight: 700;">MateoD</code> • Contraseña: <code style="color: var(--azul-marca); font-weight: 700;">Mateo2007_</code>
+          </div>
+        </div>
+
+        <div class="login-error-box" id="login-error-box">
+          <i class="fas fa-exclamation-circle" style="margin-right: 4px;"></i>
+          <span id="login-error-text">Nombre de usuario o contraseña incorrectos.</span>
+        </div>
+
+        <form id="login-form" onsubmit="handleLoginSubmit(event)">
+          <!-- Primer campo: Nombre de Usuario (Completamente vacío) -->
+          <div class="form-group">
+            <label class="form-label" id="username-field-label">Nombre de Usuario:</label>
+            <div class="input-icon-wrapper">
+              <i class="fas fa-user-circle left-icon"></i>
+              <input type="text" id="input-username" class="form-input" placeholder="Ingrese su nombre de usuario..." required autocomplete="off" value="">
+            </div>
+          </div>
+
+          <!-- Segundo campo: Contraseña con toggle de visibilidad -->
+          <div class="form-group">
+            <label class="form-label">Contraseña:</label>
+            <div class="input-icon-wrapper">
+              <i class="fas fa-lock left-icon"></i>
+              <input type="password" id="input-password" class="form-input" placeholder="Ingrese su contraseña..." required autocomplete="current-password" value="">
+              <button type="button" class="toggle-pass-btn" onclick="togglePasswordVisibility()" title="Mostrar/Ocultar contraseña">
+                <i class="fas fa-eye" id="toggle-pass-icon"></i>
+              </button>
+            </div>
+          </div>
+
+          <button type="submit" class="btn-login-submit">
+            <i class="fas fa-sign-in-alt"></i> Iniciar Sesión en Todoservicio
+          </button>
+        </form>
+
+        <div style="margin-top: 16px; text-align: center;">
+          <a href="/Todoservicio.apk" download="Todoservicio.apk" style="display: inline-flex; align-items: center; justify-content: center; gap: 8px; background: var(--azul-marca); color: #FFFFFF; padding: 11px 18px; border-radius: 12px; font-size: 12.5px; font-weight: 700; text-decoration: none; box-shadow: 0 4px 14px rgba(16,44,84,0.25);">
+            <i class="fab fa-android" style="font-size: 16px; color: #10B981;"></i> Descargar Instalador APK (.apk)
+          </a>
+        </div>
+
+        <div style="margin-top: 14px; text-align: center; font-size: 11.5px; color: var(--gris-texto);">
+          Certificación MTSS Dec. 406/88 • Soporte Oficial Uruguay
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- ==========================================================================
+       3. CONSOLA DE ADMINISTRADOR CENTRAL (MateoD)
+       ========================================================================== -->
+  <div class="app-screen" id="screen-admin">
+    <!-- Cabecera Unificada con SafeArea y Padding(top: 24.0, bottom: 12.0) -->
+    <header class="unified-safe-header">
+      <div class="header-left-col">
+        <div class="header-isotype-container">
+          <img src="/assets/Todoservicio_Icono_T_HD_PerfilWhatsApp_R.png" alt="Todoservicio">
+        </div>
+        <div class="header-brand-info">
+          <div class="header-app-title">TODOSERVICIO</div>
+          <div class="header-dynamic-sub">
+            <span class="chip-role admin">ADMIN CENTRAL</span>
+            <span>Mateo Damele</span>
+          </div>
+        </div>
+      </div>
+      <div class="header-right-actions">
+        <button class="btn-header-action" onclick="showToast('Notificaciones administrativas al día')" title="Notificaciones">
+          <i class="fas fa-bell"></i>
+          <span class="notification-dot"></span>
+        </button>
+        <button class="btn-header-action" onclick="logoutToLogin()" title="Cerrar Sesión">
+          <i class="fas fa-power-off"></i>
+        </button>
+      </div>
+    </header>
+
+    <main class="main-body-container">
+      
+      <!-- Pestaña y Módulo Principal: Gestión de Cuentas y Accesos (RBAC) -->
+      <div class="enterprise-card">
+        <div class="enterprise-card-title">
+          <span><i class="fas fa-users-cog" style="color: var(--celeste-acento); margin-right: 6px;"></i> Gestión de Cuentas y Accesos (RBAC)</span>
+          <button class="btn btn-accent" onclick="openCreateUserModal()" style="font-size: 12px; padding: 6px 12px;">
+            <i class="fas fa-user-plus"></i> + Crear Nuevo Perfil
+          </button>
+        </div>
+
+        <!-- Métricas Rápidas -->
+        <div class="admin-stats-grid">
+          <div class="stat-mini-card">
+            <div class="stat-number" id="count-clients">3</div>
+            <div class="stat-label">Clientes Activos</div>
+          </div>
+          <div class="stat-mini-card">
+            <div class="stat-number" id="count-techs">4</div>
+            <div class="stat-label">Técnicos de Campo</div>
+          </div>
+          <div class="stat-mini-card">
+            <div class="stat-number" id="count-admins">2</div>
+            <div class="stat-label">Administradores</div>
+          </div>
+          <div class="stat-mini-card">
+            <div class="stat-number" style="color: var(--verde-exito);">100%</div>
+            <div class="stat-label">Disponibilidad MTSS</div>
+          </div>
+        </div>
+
+        <p style="font-size: 12px; color: var(--gris-texto); margin-bottom: 14px;">
+          Directorio central de usuarios autorizados. Los perfiles creados pueden iniciar sesión de inmediato con su Nombre de Usuario y Contraseña desde la pantalla de Login:
+        </p>
+
+        <!-- Tabla Limpia de Cuentas Registradas -->
+        <div class="accounts-table-container">
+          <table class="accounts-table">
+            <thead>
+              <tr>
+                <th>Usuario</th>
+                <th>Nombre / Razón Social</th>
+                <th>Rol</th>
+                <th>Detalle / Especialidad</th>
+                <th>Estado</th>
+                <th>Acción</th>
+              </tr>
+            </thead>
+            <tbody id="admin-users-table-body">
+              <!-- Inyectado dinámicamente -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Resumen Operativo y Cuadrillas en Ruta -->
+      <div class="enterprise-card">
+        <div class="enterprise-card-title">
+          <span><i class="fas fa-truck-moving" style="color: var(--celeste-acento); margin-right: 6px;"></i> Operativa en Vivo • Montevideo & Canelones</span>
+          <span class="badge-live-status"><span class="live-pulsing-dot"></span> 2 CUADRILLAS EN RUTA</span>
+        </div>
+        <div style="font-size: 12.5px; color: #475569; line-height: 1.5;">
+          • <strong>Móvil #3 (Oficial Roberto Calvo)</strong>: En viaje a Pocitos Central (Rudy Burger) • ETA 14 min.<br>
+          • <strong>Móvil #1 (Oficial Carlos Ramos)</strong>: En intervención sanitaria en Plaza Zabala (Edificio Central).
+        </div>
+        <div style="margin-top: 14px; display: flex; gap: 8px;">
+          <button class="btn btn-outline" style="font-size: 12px;" onclick="navigateToScreen('client')">
+            <i class="fas fa-eye"></i> Ver Vista Cliente
+          </button>
+          <button class="btn btn-outline" style="font-size: 12px;" onclick="navigateToScreen('tech')">
+            <i class="fas fa-eye"></i> Ver Vista Técnico
+          </button>
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+  <!-- ==========================================================================
+       4. PORTAL DEL CLIENTE CORPORATIVO (Rudy Burger)
+       ========================================================================== -->
+  <div class="app-screen" id="screen-client">
+    <!-- Cabecera Unificada con SafeArea y Padding(top: 24.0, bottom: 12.0) -->
+    <header class="unified-safe-header">
+      <div class="header-left-col">
+        <div class="header-isotype-container">
+          <img src="/assets/Todoservicio_Icono_T_HD_PerfilWhatsApp_R.png" alt="Todoservicio">
+        </div>
+        <div class="header-brand-info">
+          <div class="header-app-title">TODOSERVICIO</div>
+          <div class="header-dynamic-sub">
+            <span id="client-header-greeting">Buen día, Rudy Burger S.A.S.</span>
+          </div>
+          <div style="margin-top: 4px;">
+            <button class="chip-sede-selector" onclick="cycleClientSede()">
+              <i class="fas fa-map-marker-alt" style="color: var(--celeste-acento);"></i>
+              <span id="label-active-sede">Sede: Pocitos Central ▼</span>
+            </button>
+          </div>
+        </div>
+      </div>
+      <div class="header-right-actions">
+        <button class="btn-header-action" onclick="showToast('Notificaciones: Cotizaciones y reportes actualizados.')" title="Notificaciones">
+          <i class="fas fa-bell"></i>
+          <span class="notification-dot"></span>
+        </button>
+        <button class="btn-header-action" onclick="logoutToLogin()" title="Cerrar Sesión">
+          <i class="fas fa-power-off"></i>
+        </button>
+      </div>
+    </header>
+
+    <main class="main-body-container">
+      
+      <!-- Tarjeta Viva de "Servicio en Curso" (Condicional) -->
+      <div class="enterprise-card card-live-service" id="client-live-card">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+          <span class="badge-live-status">
+            <span class="live-pulsing-dot"></span> EN CAMINO • GPS EN VIVO
+          </span>
+          <button class="btn" style="background: rgba(255,255,255,0.18); color: white; font-size: 11px; padding: 4px 10px;" onclick="toggleClientLiveService()">
+            <i class="fas fa-sync-alt"></i> Alternar Estado
+          </button>
+        </div>
+        <div style="font-weight: 800; font-size: 16px; margin-bottom: 4px;">
+          Móvil #3 • Renault Kangoo SBV-1984 (Oficial Roberto Calvo)
+        </div>
+        <p style="font-size: 12px; opacity: 0.92; margin-bottom: 8px;">
+          Mantenimiento Preventivo y Auditoría Eléctrica MTSS en curso para Pocitos Central.
+        </p>
+        <div style="font-size: 13px; color: #BAE6FD; font-weight: 700; margin-bottom: 14px;">
+          <i class="fas fa-stopwatch"></i> Tiempo estimado de llegada: <strong>14 min</strong> (Bvar. Artigas y Rivera)
+        </div>
+        <button class="btn btn-accent" style="width: 100%; justify-content: center;" onclick="openRealStreetMap('Móvil #3 • Oficial Roberto Calvo', 'Renault Kangoo SBV-1984 • En camino hacia Pocitos Central (ETA 14 min)')">
+          <i class="fas fa-map-marked-alt"></i> Seguir Recorrido GPS en Vivo
+        </button>
+      </div>
+
+      <!-- Aprobación de Presupuestos Adicionales con un Clic -->
+      <div class="enterprise-card">
+        <div class="enterprise-card-title">
+          <span><i class="fas fa-file-invoice-dollar" style="color: var(--celeste-acento); margin-right: 6px;"></i> Presupuestos en Espera de Aprobación</span>
+          <span style="font-size: 11px; background: #FEF3C7; color: #92400E; font-weight: 700; padding: 3px 8px; border-radius: 6px;">Vence en 4 días</span>
+        </div>
+
+        <div style="border: 1px solid var(--gris-borde); border-radius: 14px; padding: 14px; background: #FFFFFF;" id="budget-card-box">
+          <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+            <div>
+              <div style="font-weight: 700; color: var(--azul-marca); font-size: 14px;">COT-2026-884 • Tablero Seccional y Descargadores MTSS</div>
+              <div style="font-size: 11.5px; color: var(--gris-texto); margin-top: 2px;">Local Pocitos Central • Solicitud #SR-9418</div>
+            </div>
+            <div style="text-align: right;">
+              <div style="font-size: 17px; font-weight: 800; color: var(--celeste-acento);">USD 420</div>
+              <div style="font-size: 10px; color: var(--gris-texto);">IVA Inc.</div>
+            </div>
+          </div>
+          <p style="font-size: 12px; color: #475569; margin: 8px 0;">Suministro y colocación de disyuntor tetrapolar Schneider Electric 40A y conexión a jabalina con protocolo.</p>
+          <div style="display: flex; gap: 8px; margin-top: 10px;">
+            <button class="btn btn-success" style="font-size: 12px;" onclick="approveBudget()">
+              <i class="fas fa-check"></i> Aprobar en 1 Clic
+            </button>
+            <button class="btn btn-outline" style="font-size: 12px;" onclick="showToast('Consulta enviada al Ingeniero a cargo.')">
+              <i class="fas fa-comments"></i> Consultar
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Resumen Ejecutivo Mensual (Informe A4 de 2 Páginas para Asambleas) -->
+      <div class="enterprise-card">
+        <div class="enterprise-card-title">
+          <span><i class="fas fa-file-contract" style="color: var(--celeste-acento); margin-right: 6px;"></i> Resumen Ejecutivo Mensual (Asambleas)</span>
+          <span style="font-size: 11px; background: var(--celeste-claro); color: var(--azul-corp); font-weight: 700; padding: 3px 8px; border-radius: 6px;">Marzo 2026</span>
+        </div>
+        <p style="font-size: 12.5px; color: var(--gris-texto); margin-bottom: 14px; line-height: 1.4;">
+          Informe A4 de 2 páginas con balance integral de visitas, rubros atendidos y certificación para presentación en asambleas de copropietarios y directores:
+        </p>
+        <button class="btn btn-primary" style="width: 100%; justify-content: center;" onclick="openExecutiveSummaryModal()">
+          <i class="fas fa-file-pdf"></i> Generar y Descargar Resumen Ejecutivo Mensual
+        </button>
+      </div>
+
+      <!-- Formulario Express de Solicitud de Servicio -->
+      <div class="enterprise-card">
+        <div class="enterprise-card-title">
+          <span><i class="fas fa-plus-circle" style="color: var(--celeste-acento); margin-right: 6px;"></i> Solicitar Nueva Intervención Técnica</span>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Descripción de la falla o requerimiento:</label>
+          <textarea id="express-req-text" class="form-input" rows="3" placeholder="Ej: Pérdida en canilla de cocina o salto de llave térmica..." style="resize: vertical;"></textarea>
+        </div>
+        <button class="btn btn-accent" style="width: 100%; justify-content: center;" onclick="submitClientRequest()">
+          <i class="fas fa-paper-plane"></i> Enviar a Mesa de Control Central
+        </button>
+      </div>
+
+    </main>
+  </div>
+
+  <!-- ==========================================================================
+       5. PORTAL DEL TÉCNICO EN CAMPO (Oficial Roberto Calvo)
+       ========================================================================== -->
+  <div class="app-screen" id="screen-tech">
+    <!-- Cabecera Unificada con SafeArea y Padding(top: 24.0, bottom: 12.0) -->
+    <header class="unified-safe-header">
+      <div class="header-left-col">
+        <div class="header-isotype-container">
+          <img src="/assets/Todoservicio_Icono_T_HD_PerfilWhatsApp_R.png" alt="Todoservicio">
+        </div>
+        <div class="header-brand-info">
+          <div class="header-app-title">TODOSERVICIO</div>
+          <div class="header-dynamic-sub">
+            <span class="chip-role tech">OFICIAL CUADRILLA</span>
+            <span>Roberto Calvo • Móvil #3</span>
+          </div>
+        </div>
+      </div>
+      <div class="header-right-actions">
+        <button class="btn-header-action" onclick="showToast('Notificaciones de cuadrilla al día')" title="Notificaciones">
+          <i class="fas fa-bell"></i>
+        </button>
+        <button class="btn-header-action" onclick="logoutToLogin()" title="Cerrar Sesión">
+          <i class="fas fa-power-off"></i>
+        </button>
+      </div>
+    </header>
+
+    <main class="main-body-container">
+      
+      <!-- Agenda Diaria Agrupada con Botón Destacado "Organizar mi ruta" -->
+      <div class="enterprise-card">
+        <div class="enterprise-card-title">
+          <span><i class="fas fa-calendar-day" style="color: var(--celeste-acento); margin-right: 6px;"></i> Agenda Diaria de Visitas</span>
+          <button class="btn btn-accent" onclick="organizeRoute()" style="font-size: 11.5px; padding: 6px 12px;">
+            <i class="fas fa-route"></i> Organizar mi ruta
+          </button>
+        </div>
+
+        <div id="tech-stops-list" style="display: flex; flex-direction: column; gap: 10px;">
+          <!-- Parada 1 -->
+          <div style="border: 1px solid var(--gris-borde); border-left: 4px solid var(--azul-marca); border-radius: 12px; padding: 12px; background: #FFFFFF;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <span style="font-size: 11px; font-weight: 800; color: var(--azul-corp); background: #EBF4FC; padding: 2px 8px; border-radius: 4px;">PARADA 1 • 09:30 HS</span>
+              <span style="font-size: 11px; font-weight: 700; color: var(--verde-exito);">EN CURSO</span>
+            </div>
+            <div style="font-weight: 700; color: var(--azul-marca); font-size: 13.5px; margin-top: 4px;">Rudy Burger • Pocitos Central</div>
+            <div style="font-size: 11.5px; color: var(--gris-texto);">Av. Brasil 2840 • Mantenimiento Preventivo Eléctrico MTSS</div>
+          </div>
+          <!-- Parada 2 -->
+          <div style="border: 1px solid var(--gris-borde); border-left: 4px solid #94A3B8; border-radius: 12px; padding: 12px; background: #FFFFFF;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <span style="font-size: 11px; font-weight: 800; color: #475569; background: #F1F5F9; padding: 2px 8px; border-radius: 4px;">PARADA 2 • 12:30 HS</span>
+              <span style="font-size: 11px; font-weight: 700; color: #64748B;">PENDIENTE</span>
+            </div>
+            <div style="font-weight: 700; color: var(--azul-marca); font-size: 13.5px; margin-top: 4px;">Edificio Plaza Zabala</div>
+            <div style="font-size: 11.5px; color: var(--gris-texto);">Circunvalación Durango 342 • Revisión Sanitaria y Bombas</div>
+          </div>
+          <!-- Parada 3 -->
+          <div style="border: 1px solid var(--gris-borde); border-left: 4px solid #94A3B8; border-radius: 12px; padding: 12px; background: #FFFFFF;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <span style="font-size: 11px; font-weight: 800; color: #475569; background: #F1F5F9; padding: 2px 8px; border-radius: 4px;">PARADA 3 • 15:00 HS</span>
+              <span style="font-size: 11px; font-weight: 700; color: #64748B;">PENDIENTE</span>
+            </div>
+            <div style="font-weight: 700; color: var(--azul-marca); font-size: 13.5px; margin-top: 4px;">Complejo Carrasco Este</div>
+            <div style="font-size: 11.5px; color: var(--gris-texto);">Av. Italia 6200 • Filtros y Climatización Central</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Checklist Preventivo Obligatorio por Rubro -->
+      <div class="enterprise-card">
+        <div class="enterprise-card-title">
+          <span><i class="fas fa-tasks" style="color: var(--celeste-acento); margin-right: 6px;"></i> Checklist Preventivo MTSS Obligatorio</span>
+        </div>
+        
+        <div style="margin-bottom: 12px;">
+          <div style="font-size: 12px; font-weight: 700; color: var(--azul-marca); margin-bottom: 6px;">
+            <i class="fas fa-bolt" style="color: var(--amarillo-alerta);"></i> Electricidad MTSS:
+          </div>
+          <label style="display: flex; align-items: center; gap: 8px; font-size: 12px; margin-bottom: 4px;">
+            <input type="checkbox" checked> Ajuste de bornes térmicos y reapriete
+          </label>
+          <label style="display: flex; align-items: center; gap: 8px; font-size: 12px; margin-bottom: 4px;">
+            <input type="checkbox" checked> Prueba mecánica de disyuntores diferenciales
+          </label>
+          <label style="display: flex; align-items: center; gap: 8px; font-size: 12px;">
+            <input type="checkbox" checked> Termografía infrarroja de barras principales
+          </label>
+        </div>
+
+        <div style="margin-bottom: 12px;">
+          <div style="font-size: 12px; font-weight: 700; color: var(--azul-marca); margin-bottom: 6px;">
+            <i class="fas fa-faucet" style="color: var(--celeste-acento);"></i> Sanitaria:
+          </div>
+          <label style="display: flex; align-items: center; gap: 8px; font-size: 12px; margin-bottom: 4px;">
+            <input type="checkbox"> Presurización de colectores y pruebas de estanqueidad
+          </label>
+          <label style="display: flex; align-items: center; gap: 8px; font-size: 12px;">
+            <input type="checkbox"> Verificación de válvulas de retención y amperaje de bombas
+          </label>
+        </div>
+
+        <div>
+          <div style="font-size: 12px; font-weight: 700; color: var(--azul-marca); margin-bottom: 6px;">
+            <i class="fas fa-snowflake" style="color: #06B6D4;"></i> Climatización:
+          </div>
+          <label style="display: flex; align-items: center; gap: 8px; font-size: 12px;">
+            <input type="checkbox"> Limpieza de filtros y medición de consumo en amperes
+          </label>
+        </div>
+      </div>
+
+      <!-- Lector de Código QR y Ficha Técnica de Activos -->
+      <div class="enterprise-card">
+        <div class="enterprise-card-title">
+          <span><i class="fas fa-qrcode" style="color: var(--celeste-acento); margin-right: 6px;"></i> Lector QR de Activos & Repuestos</span>
+        </div>
+        <p style="font-size: 12px; color: var(--gris-texto); margin-bottom: 12px;">
+          Escanee el código QR adherido al tablero o equipo para cargar automáticamente su ficha histórica:
+        </p>
+        <button class="btn btn-outline" style="width: 100%; justify-content: center;" onclick="simulateQrScan()">
+          <i class="fas fa-camera"></i> Escanear Código QR de Equipo
+        </button>
+      </div>
+
+      <!-- Cierre en Hoja A4 Flotante con Doble Firma -->
+      <div class="enterprise-card">
+        <div class="enterprise-card-title">
+          <span><i class="fas fa-file-signature" style="color: var(--celeste-acento); margin-right: 6px;"></i> Cierre en "Hoja A4 Flotante"</span>
+        </div>
+        <p style="font-size: 12px; color: var(--gris-texto); margin-bottom: 14px;">
+          Visor previo con membrete oficial, evidencia fotográfica y doble firma digital para certificación inmediata:
+        </p>
+        <button class="btn btn-primary" style="width: 100%; justify-content: center;" onclick="openFloatingA4ClosureModal()">
+          <i class="fas fa-signature"></i> Abrir Hoja A4 y Firmar Cierre
+        </button>
+      </div>
+
+    </main>
+  </div>
+
+  <!-- ==========================================================================
+       6. BARRA DE NAVEGACIÓN INFERIOR (BOTTOM NAV CON 4 PESTAÑAS Y FAB)
+       ========================================================================== -->
+  <nav class="unified-bottom-nav" id="global-bottom-nav">
+    <button class="nav-tab-btn active" id="tab-inicio" onclick="handleBottomTab('inicio')">
+      <i class="fas fa-home"></i>
+      <span>INICIO</span>
+    </button>
+    <button class="nav-tab-btn" id="tab-operaciones" onclick="handleBottomTab('operaciones')">
+      <i class="fas fa-clipboard-list"></i>
+      <span>OPERACIONES</span>
+    </button>
+
+    <!-- Botón Central Flotante Circular en Azul Marca (#102C54) -->
+    <div class="nav-fab-center" onclick="handleFabAction()" title="Crear Tarea / Solicitar Servicio">
+      <i class="fas fa-plus"></i>
+    </div>
+
+    <button class="nav-tab-btn" id="tab-reportes" onclick="handleBottomTab('reportes')">
+      <i class="fas fa-file-contract"></i>
+      <span>REPORTES</span>
+    </button>
+    <button class="nav-tab-btn" id="tab-mas" onclick="handleBottomTab('mas')">
+      <i class="fas fa-ellipsis-h"></i>
+      <span>MÁS</span>
+    </button>
+  </nav>
+
+  <!-- ==========================================================================
+       7. MODALES DEL SISTEMA
+       ========================================================================== -->
+
+  <!-- Modal: Crear Nuevo Perfil (Admin) -->
+  <div class="modal-overlay" id="modal-create-user">
+    <div class="modal-box">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
+        <h3 style="font-size: 16px; font-weight: 800; color: var(--azul-marca);">
+          <i class="fas fa-user-plus" style="color: var(--celeste-acento);"></i> Alta de Nuevo Perfil en Todoservicio
+        </h3>
+        <button onclick="closeModal('modal-create-user')" style="background: none; border: none; font-size: 18px; cursor: pointer; color: var(--gris-texto);">&times;</button>
+      </div>
+
+      <!-- Selector de Tipo -->
+      <div class="role-selector-bar" style="margin-bottom: 16px;">
+        <button type="button" class="role-selector-btn active" id="type-btn-client" onclick="switchCreateType('client')">Cliente</button>
+        <button type="button" class="role-selector-btn" id="type-btn-tech" onclick="switchCreateType('tech')">Técnico</button>
+        <button type="button" class="role-selector-btn" id="type-btn-admin" onclick="switchCreateType('admin')">Administrador</button>
+      </div>
+
+      <form onsubmit="handleCreateUserSubmit(event)">
+        <!-- Formulario Cliente -->
+        <div id="form-type-client">
+          <div class="form-group">
+            <label class="form-label">Razón Social / Empresa:</label>
+            <input type="text" id="new-cli-name" class="form-input" placeholder="Ej: Supermercados Disco S.A." required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">RUT / Identificación Fiscal:</label>
+            <input type="text" id="new-cli-rut" class="form-input" placeholder="Ej: 219842100018" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Sede Principal y Sedes adicionales:</label>
+            <input type="text" id="new-cli-sedes" class="form-input" placeholder="Ej: Casa Central (Pocitos) + Carrasco + Centro" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Plan Mensual Contratado:</label>
+            <select id="new-cli-plan" class="form-input" style="padding-left: 14px;">
+              <option value="Abono Pyme (4 Visitas)">Abono Pyme (4 Visitas Mensuales)</option>
+              <option value="Corporativo (8 Visitas)" selected>Corporativo (8 Visitas Mensuales)</option>
+              <option value="Industrial a Medida">Industrial a Medida (Guardia 24/7)</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Formulario Técnico -->
+        <div id="form-type-tech" style="display: none;">
+          <div class="form-group">
+            <label class="form-label">Nombre y Apellido:</label>
+            <input type="text" id="new-tec-name" class="form-input" placeholder="Ej: Carlos Ramos">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Especialidad Técnica:</label>
+            <select id="new-tec-specialty" class="form-input" style="padding-left: 14px;">
+              <option value="Electricidad MTSS">Electricidad MTSS</option>
+              <option value="Sanitaria">Sanitaria</option>
+              <option value="Climatización">Climatización</option>
+              <option value="Integral Facility">Integral Facility</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Teléfono / WhatsApp:</label>
+            <input type="text" id="new-tec-phone" class="form-input" placeholder="Ej: 099 123 456">
+          </div>
+        </div>
+
+        <!-- Formulario Admin -->
+        <div id="form-type-admin" style="display: none;">
+          <div class="form-group">
+            <label class="form-label">Nombre del Responsable:</label>
+            <input type="text" id="new-adm-name" class="form-input" placeholder="Ej: Laura Mendiondo">
+          </div>
+        </div>
+
+        <!-- Credenciales comunes para todos los perfiles -->
+        <div style="background: #F8FAFC; border: 1px solid var(--gris-borde); border-radius: 12px; padding: 14px; margin-bottom: 16px;">
+          <div style="font-size: 12.5px; font-weight: 700; color: var(--azul-marca); margin-bottom: 10px;">
+            <i class="fas fa-id-badge"></i> Credenciales de Acceso para el Perfil:
+          </div>
+          <div class="form-group">
+            <label class="form-label">Nombre de Usuario (para Login):</label>
+            <input type="text" id="new-user-username" class="form-input" placeholder="Ej: discosa o cramos" required>
+          </div>
+          <div class="form-group" style="margin-bottom: 0;">
+            <label class="form-label">Contraseña:</label>
+            <input type="text" id="new-user-password" class="form-input" placeholder="Ingrese contraseña segura..." required>
+          </div>
+        </div>
+
+        <button type="submit" class="btn btn-primary" style="width: 100%; justify-content: center; padding: 12px;">
+          <i class="fas fa-save"></i> Guardar y Asignar Credenciales
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal: Resumen Ejecutivo Mensual (Informe A4) -->
+  <div class="modal-overlay" id="modal-executive-summary">
+    <div class="modal-box" style="max-width: 600px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
+        <h3 style="font-size: 16px; font-weight: 800; color: var(--azul-marca);">
+          <i class="fas fa-file-pdf" style="color: var(--rojo-error);"></i> Resumen Ejecutivo Mensual (2 Páginas A4)
+        </h3>
+        <button onclick="closeModal('modal-executive-summary')" style="background: none; border: none; font-size: 18px; cursor: pointer; color: var(--gris-texto);">&times;</button>
+      </div>
+
+      <!-- Simulación Hoja A4 -->
+      <div class="a4-floating-sheet" style="font-size: 12px; color: #334155;">
+        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid var(--azul-marca); padding-bottom: 10px; margin-bottom: 14px;">
+          <img src="/assets/Todoservicio_Logo_HD.png" alt="Todoservicio" style="height: 32px; object-fit: contain;">
+          <div style="text-align: right; font-size: 11px; color: var(--gris-texto);">
+            <strong>INFORME DE GESTIÓN MENSUAL</strong><br>
+            Período: Marzo 2026
+          </div>
+        </div>
+
+        <div style="margin-bottom: 12px;">
+          <strong>Cliente:</strong> Rudy Burger S.A.S. (RUT 219842100018)<br>
+          <strong>Plan Contratado:</strong> Corporativo (8 Visitas Mensuales)<br>
+          <strong>Sedes Atendidas:</strong> Pocitos Central, Plaza Zabala, Carrasco Este.
+        </div>
+
+        <div style="background: #F8FAFC; border: 1px solid var(--gris-borde); border-radius: 8px; padding: 10px; margin-bottom: 12px;">
+          <strong>Balance de Visitas Ejecutadas:</strong>
+          <ul style="margin-left: 18px; margin-top: 4px;">
+            <li>6 Visitas Preventivas Completadas con Certificación MTSS.</li>
+            <li>2 Guardias de Urgencia Resueltas en menos de 45 minutos.</li>
+            <li>Cumplimiento del Plan: 100% de objetivos de mantenimiento.</li>
+          </ul>
+        </div>
+
+        <div style="border-top: 1px dashed var(--gris-borde); padding-top: 10px; display: flex; justify-content: space-between; align-items: center;">
+          <div style="font-size: 11px; color: var(--gris-texto);">
+            Certificado digitalmente bajo normativa MTSS Dec. 406/88.
+          </div>
+          <div style="text-align: center;">
+            <div style="font-family: cursive; color: var(--azul-marca); font-size: 14px;">Ing. Mateo Damele</div>
+            <div style="font-size: 10px; color: var(--gris-texto);">Dirección Técnica Todoservicio</div>
+          </div>
+        </div>
+      </div>
+
+      <div style="display: flex; gap: 8px;">
+        <button class="btn btn-primary" style="flex: 1; justify-content: center;" onclick="downloadExecutivePdf()">
+          <i class="fas fa-download"></i> Descargar Documento A4 (PDF)
+        </button>
+        <button class="btn btn-outline" onclick="closeModal('modal-executive-summary')">Cerrar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Cierre en "Hoja A4 Flotante" con Doble Firma y Satisfacción de 1 Toque -->
+  <div class="modal-overlay" id="modal-floating-a4">
+    <div class="modal-box" style="max-width: 580px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
+        <h3 style="font-size: 16px; font-weight: 800; color: var(--azul-marca);">
+          <i class="fas fa-certificate" style="color: var(--celeste-acento);"></i> Cierre de Orden en Hoja A4
+        </h3>
+        <button onclick="closeModal('modal-floating-a4')" style="background: none; border: none; font-size: 18px; cursor: pointer; color: var(--gris-texto);">&times;</button>
+      </div>
+
+      <div class="a4-floating-sheet" style="font-size: 12px; margin-bottom: 14px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1.5px solid var(--azul-marca); padding-bottom: 8px; margin-bottom: 10px;">
+          <img src="/assets/Todoservicio_Logo_HD.png" alt="Todoservicio" style="height: 28px; object-fit: contain;">
+          <span style="font-weight: 800; color: var(--azul-marca);">OT-2026-948</span>
+        </div>
+        <div>
+          <strong>Cliente:</strong> Rudy Burger S.A.S. • Pocitos Central<br>
+          <strong>Técnico:</strong> Oficial Roberto Calvo (Mat. UTE #41892)<br>
+          <strong>Falla / Labor:</strong> Mantenimiento y Termografía de Tableros Eléctricos.
+        </div>
+
+        <div style="display: flex; gap: 10px; margin: 12px 0;">
+          <div style="flex: 1; background: #F1F5F9; border-radius: 8px; padding: 10px; text-align: center;">
+            <i class="fas fa-camera" style="color: var(--gris-texto);"></i><br>
+            <span style="font-size: 11px; font-weight: 700;">Foto Antes (Inspección)</span>
+          </div>
+          <div style="flex: 1; background: #F1F5F9; border-radius: 8px; padding: 10px; text-align: center;">
+            <i class="fas fa-check-circle" style="color: var(--verde-exito);"></i><br>
+            <span style="font-size: 11px; font-weight: 700;">Foto Después (Certificada)</span>
+          </div>
+        </div>
+
+        <!-- Canvas de Firma Digital -->
+        <div style="margin-top: 10px;">
+          <label style="font-weight: 700; font-size: 11.5px; display: block; margin-bottom: 4px;">Firma de Conformidad del Cliente:</label>
+          <canvas id="closure-signature-canvas" width="480" height="110" style="border: 1.5px dashed #CBD5E1; border-radius: 8px; width: 100%; background: #FAFAFC; touch-action: none; cursor: crosshair;"></canvas>
+          <button type="button" class="btn btn-outline" style="font-size: 11px; padding: 3px 8px; margin-top: 4px;" onclick="clearClosureSignature()">
+            <i class="fas fa-eraser"></i> Limpiar Firma
+          </button>
+        </div>
+      </div>
+
+      <!-- Pantalla Post-Firma de Satisfacción de 1 Toque -->
+      <div style="background: #F8FAFC; border: 1px solid var(--gris-borde); border-radius: 14px; padding: 14px; margin-bottom: 16px;">
+        <div style="font-size: 12.5px; font-weight: 700; color: var(--azul-marca); margin-bottom: 6px;">
+          Satisfacción del Servicio (1 Toque):
+        </div>
+        <!-- 5 Estrellas -->
+        <div style="font-size: 22px; color: #F59E0B; cursor: pointer; margin-bottom: 8px;">
+          <i class="fas fa-star" onclick="setRating(1)"></i>
+          <i class="fas fa-star" onclick="setRating(2)"></i>
+          <i class="fas fa-star" onclick="setRating(3)"></i>
+          <i class="fas fa-star" onclick="setRating(4)"></i>
+          <i class="fas fa-star" onclick="setRating(5)"></i>
+        </div>
+        <!-- 3 Chips -->
+        <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+          <button type="button" class="btn btn-outline" style="font-size: 11px; padding: 4px 8px;" onclick="toggleSatisfactionChip(this)">
+            ✓ Puntualidad
+          </button>
+          <button type="button" class="btn btn-outline" style="font-size: 11px; padding: 4px 8px;" onclick="toggleSatisfactionChip(this)">
+            ✓ Limpieza
+          </button>
+          <button type="button" class="btn btn-outline" style="font-size: 11px; padding: 4px 8px;" onclick="toggleSatisfactionChip(this)">
+            ✓ Claridad técnica
+          </button>
+        </div>
+      </div>
+
+      <button class="btn btn-success" style="width: 100%; justify-content: center; padding: 12px;" onclick="finalizeClosureSheet()">
+        <i class="fas fa-check-double"></i> Finalizar, Certificar y Enviar PDF
+      </button>
+    </div>
+  </div>
+
+  <!-- Modal de Mapa Callejero Real Interactivo (OpenStreetMap / Montevideo) -->
+  <div class="modal-overlay" id="modal-real-gps-map">
+    <div class="modal-box" style="max-width: 600px; padding: 18px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <div style="width: 32px; height: 32px; border-radius: 8px; background: #EBF4FC; color: var(--celeste-acento); display: flex; align-items: center; justify-content: center;">
+            <i class="fas fa-map-marked-alt"></i>
+          </div>
+          <div>
+            <div style="font-weight: 800; color: var(--azul-marca); font-size: 14.5px;" id="real-map-title">Mapa de Monitoreo GPS en Vivo</div>
+            <div style="font-size: 11px; color: var(--gris-texto);" id="real-map-subtitle">Calles y geocercas en tiempo real • Montevideo</div>
+          </div>
+        </div>
+        <button onclick="closeModal('modal-real-gps-map')" style="background: none; border: none; font-size: 20px; cursor: pointer; color: var(--gris-texto);">&times;</button>
+      </div>
+
+      <div id="live-leaflet-map-container" style="width: 100%; height: 320px; border-radius: 14px; border: 1px solid var(--gris-borde); overflow: hidden; background: #F8FAFC;"></div>
+
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--gris-borde);">
+        <div style="font-size: 11px; color: var(--gris-texto);">
+          <i class="fas fa-satellite-dish" style="color: var(--verde-exito);"></i> GPS Activo • Cobertura Montevideo y Canelones
+        </div>
+        <button class="btn btn-outline" style="font-size: 12px; padding: 6px 14px;" onclick="closeModal('modal-real-gps-map')">
+          Cerrar Mapa
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notificaciones -->
+  <div id="toast-notification"></div>
+
+  <!-- ==========================================================================
+       8. JAVASCRIPT: LÓGICA DE RUTAS, PERFILES, SPLASH Y OPERATIVA
+       ========================================================================== -->
+  <script>
+    // --------------------------------------------------------------------------
+    // BASE DE DATOS REACTIVA DE USUARIOS (RBAC)
+    // --------------------------------------------------------------------------
+    let registeredUsers = [
+      {
+        username: "MateoD",
+        password: "Mateo2007_",
+        name: "Mateo Damele",
+        role: "admin",
+        detail: "Dirección Operativa Central",
+        status: "ACTIVE"
+      },
+      {
+        username: "lmendiondo",
+        password: "Admin2026_",
+        name: "Laura Mendiondo",
+        role: "admin",
+        detail: "Mesa de Control & Despacho",
+        status: "ACTIVE"
+      },
+      {
+        username: "rudyburger",
+        password: "Rudy2026_",
+        name: "Rudy Burger S.A.S.",
+        role: "client",
+        detail: "Corporativo (8 Visitas) • Pocitos Central",
+        status: "ACTIVE"
+      },
+      {
+        username: "robertoc",
+        password: "Tech2026_",
+        name: "Oficial Roberto Calvo",
+        role: "tech",
+        detail: "Electricidad MTSS • Móvil #3",
+        status: "ACTIVE"
+      },
+      {
+        username: "cramos",
+        password: "Tech2026_",
+        name: "Oficial Carlos Ramos",
+        role: "tech",
+        detail: "Sanitaria & Bombas • Móvil #1",
+        status: "ACTIVE"
+      }
+    ];
+
+    let currentSelectedRole = "admin";
+    let currentActiveScreen = "login";
+    let isClientLiveActive = true;
+    let closureCanvas, closureCtx, isDrawing = false, hasSigned = false;
+
+    // --------------------------------------------------------------------------
+    // 1. SPLASH SCREEN: ANIMACIÓN "LOGO REVEAL" (1.2 SEGUNDOS)
+    // --------------------------------------------------------------------------
+    window.addEventListener('DOMContentLoaded', () => {
+      // Inicia el ciclo interactivo de Splash Screen y navega a Login a los 1.2s
+      setTimeout(() => {
+        const splash = document.getElementById('splash-screen');
+        if (splash) {
+          splash.classList.add('hidden');
+        }
+        // Navega de forma automática e irreversible hacia la pantalla de Login ('/login')
+        navigateToScreen('login');
+      }, 1200);
+
+      renderAdminUsersTable();
+      initClosureSignature();
+    });
+
+    // --------------------------------------------------------------------------
+    // 2. GESTIÓN DE RUTAS Y NAVEGACIÓN
+    // --------------------------------------------------------------------------
+    function navigateToScreen(screenId) {
+      document.querySelectorAll('.app-screen').forEach(s => s.classList.remove('active'));
+      const target = document.getElementById('screen-' + screenId);
+      if (target) {
+        target.classList.add('active');
+        currentActiveScreen = screenId;
+        window.scrollTo(0, 0);
+      }
+
+      // Mostrar u ocultar Bottom Nav según pantalla
+      const bNav = document.getElementById('global-bottom-nav');
+      if (bNav) {
+        if (screenId === 'login') {
+          bNav.style.display = 'none';
+        } else {
+          bNav.style.display = 'flex';
+          updateBottomNavActive(screenId);
+        }
+      }
+    }
+
+    function updateBottomNavActive(screenId) {
+      document.querySelectorAll('.nav-tab-btn').forEach(b => b.classList.remove('active'));
+      if (screenId === 'client' || screenId === 'tech' || screenId === 'admin') {
+        const tab = document.getElementById('tab-inicio');
+        if (tab) tab.classList.add('active');
+      }
+    }
+
+    function logoutToLogin() {
+      // Limpiar campos de login para mantener sobriedad
+      document.getElementById('input-username').value = '';
+      document.getElementById('input-password').value = '';
+      hideLoginError();
+      navigateToScreen('login');
+      showToast("Sesión cerrada correctamente.");
+    }
+
+    // --------------------------------------------------------------------------
+    // 3. PANTALLA DE ACCESO (LOGIN) POR NOMBRE DE USUARIO
+    // --------------------------------------------------------------------------
+    function setLoginRole(role) {
+      currentSelectedRole = role;
+      document.querySelectorAll('.role-selector-btn').forEach(b => b.classList.remove('active'));
+      const activeBtn = document.getElementById('role-btn-' + role);
+      if (activeBtn) activeBtn.classList.add('active');
+
+      const banner = document.getElementById('master-cred-banner');
+      if (banner) {
+        banner.style.display = (role === 'admin') ? 'flex' : 'none';
+      }
+
+      const label = document.getElementById('username-field-label');
+      if (label) {
+        if (role === 'admin') label.textContent = "Nombre de Usuario (Admin):";
+        else if (role === 'client') label.textContent = "Nombre de Usuario (Cliente):";
+        else label.textContent = "Nombre de Usuario (Técnico):";
+      }
+      hideLoginError();
+    }
+
+    function togglePasswordVisibility() {
+      const passInput = document.getElementById('input-password');
+      const icon = document.getElementById('toggle-pass-icon');
+      if (passInput.type === 'password') {
+        passInput.type = 'text';
+        icon.classList.remove('fa-eye');
+        icon.classList.add('fa-eye-slash');
+      } else {
+        passInput.type = 'password';
+        icon.classList.remove('fa-eye-slash');
+        icon.classList.add('fa-eye');
+      }
+    }
+
+    function showLoginError(msg) {
+      const box = document.getElementById('login-error-box');
+      const txt = document.getElementById('login-error-text');
+      if (box && txt) {
+        txt.textContent = msg;
+        box.style.display = 'block';
+      }
+    }
+
+    function hideLoginError() {
+      const box = document.getElementById('login-error-box');
+      if (box) box.style.display = 'none';
+    }
+
+    function handleLoginSubmit(e) {
+      e.preventDefault();
+      const u = document.getElementById('input-username').value.trim();
+      const p = document.getElementById('input-password').value.trim();
+
+      // Validación de Credenciales Maestras de Administrador Central
+      if (u === 'MateoD' && p === 'Mateo2007_') {
+        hideLoginError();
+        navigateToScreen('admin');
+        showToast("¡Acceso Maestro Central concedido! Bienvenido Mateo Damele.");
+        return;
+      }
+
+      // Buscar usuario en base de datos
+      const found = registeredUsers.find(user => 
+        user.username.toLowerCase() === u.toLowerCase() && user.password === p
+      );
+
+      if (!found) {
+        showLoginError("Nombre de usuario o contraseña incorrectos.");
+        return;
+      }
+
+      // Si existe y las credenciales coinciden
+      hideLoginError();
+      if (found.role === 'admin') {
+        navigateToScreen('admin');
+        showToast(`¡Bienvenido Administrador, ${found.name}!`);
+      } else if (found.role === 'client') {
+        navigateToScreen('client');
+        showToast(`¡Bienvenido, ${found.name}!`);
+      } else if (found.role === 'tech') {
+        navigateToScreen('tech');
+        showToast(`¡Bienvenido Técnico, ${found.name}!`);
+      }
+    }
+
+    // --------------------------------------------------------------------------
+    // 4. GESTIÓN DE PERFILES EN EL ROL DE ADMINISTRADOR
+    // --------------------------------------------------------------------------
+    let selectedCreateType = 'client';
+
+    function renderAdminUsersTable() {
+      const tbody = document.getElementById('admin-users-table-body');
+      if (!tbody) return;
+
+      tbody.innerHTML = '';
+      registeredUsers.forEach((u, index) => {
+        const tr = document.createElement('tr');
+        const roleClass = u.role;
+        const roleLabel = u.role.toUpperCase();
+
+        tr.innerHTML = `
+          <td><strong>${u.username}</strong></td>
+          <td>${u.name}</td>
+          <td><span class="chip-role ${roleClass}">${roleLabel}</span></td>
+          <td style="font-size: 11.5px; color: var(--gris-texto);">${u.detail}</td>
+          <td>
+            <span style="color: ${u.status === 'ACTIVE' ? 'var(--verde-exito)' : 'var(--gris-texto)'}; font-weight: 700; font-size: 11px;">
+              ● ${u.status === 'ACTIVE' ? 'Activo' : 'Inactivo'}
+            </span>
+          </td>
+          <td>
+            <button class="btn btn-outline" style="font-size: 11px; padding: 3px 8px;" onclick="toggleUserStatus(${index})">
+              ${u.status === 'ACTIVE' ? 'Desactivar' : 'Activar'}
+            </button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      // Actualizar conteos
+      const cCli = registeredUsers.filter(u => u.role === 'client').length;
+      const cTec = registeredUsers.filter(u => u.role === 'tech').length;
+      const cAdm = registeredUsers.filter(u => u.role === 'admin').length;
+      
+      const elCli = document.getElementById('count-clients');
+      const elTec = document.getElementById('count-techs');
+      const elAdm = document.getElementById('count-admins');
+      if (elCli) elCli.textContent = cCli;
+      if (elTec) elTec.textContent = cTec;
+      if (elAdm) elAdm.textContent = cAdm;
+    }
+
+    function toggleUserStatus(index) {
+      registeredUsers[index].status = (registeredUsers[index].status === 'ACTIVE') ? 'INACTIVE' : 'ACTIVE';
+      renderAdminUsersTable();
+      showToast(`Estado de ${registeredUsers[index].username} modificado.`);
+    }
+
+    function openCreateUserModal() {
+      openModal('modal-create-user');
+    }
+
+    function switchCreateType(type) {
+      selectedCreateType = type;
+      ['client', 'tech', 'admin'].forEach(t => {
+        const btn = document.getElementById('type-btn-' + t);
+        const form = document.getElementById('form-type-' + t);
+        if (btn) btn.classList.toggle('active', t === type);
+        if (form) form.style.display = (t === type) ? 'block' : 'none';
+      });
+    }
+
+    function handleCreateUserSubmit(e) {
+      e.preventDefault();
+      const u = document.getElementById('new-user-username').value.trim();
+      const p = document.getElementById('new-user-password').value.trim();
+
+      if (!u || !p) {
+        showToast("Nombre de usuario y contraseña son obligatorios.");
+        return;
+      }
+
+      // Comprobar si ya existe
+      if (registeredUsers.some(user => user.username.toLowerCase() === u.toLowerCase())) {
+        showToast("El nombre de usuario ya está registrado.");
+        return;
+      }
+
+      let name = "";
+      let detail = "";
+
+      if (selectedCreateType === 'client') {
+        const rz = document.getElementById('new-cli-name').value.trim();
+        const rut = document.getElementById('new-cli-rut').value.trim();
+        const sedes = document.getElementById('new-cli-sedes').value.trim();
+        const plan = document.getElementById('new-cli-plan').value;
+        name = rz || "Cliente Nuevo S.A.";
+        detail = `${plan} • RUT: ${rut} (${sedes})`;
+      } else if (selectedCreateType === 'tech') {
+        const tn = document.getElementById('new-tec-name').value.trim();
+        const esp = document.getElementById('new-tec-specialty').value;
+        const ph = document.getElementById('new-tec-phone').value.trim();
+        name = tn || "Técnico Oficial";
+        detail = `${esp} • ${ph}`;
+      } else {
+        const an = document.getElementById('new-adm-name').value.trim();
+        name = an || "Administrador Central";
+        detail = "Dirección Operativa";
+      }
+
+      const newUser = {
+        username: u,
+        password: p,
+        name: name,
+        role: selectedCreateType,
+        detail: detail,
+        status: "ACTIVE"
+      };
+
+      registeredUsers.unshift(newUser);
+      renderAdminUsersTable();
+      closeModal('modal-create-user');
+      showToast(`¡Perfil "${u}" creado y asignado con éxito! Listo para iniciar sesión.`);
+      
+      // Limpiar formulario
+      document.getElementById('new-user-username').value = '';
+      document.getElementById('new-user-password').value = '';
+    }
+
+    // --------------------------------------------------------------------------
+    // 5. OPERATIVA DE CLIENTE Y TÉCNICO
+    // --------------------------------------------------------------------------
+    function cycleClientSede() {
+      const sedes = ["Sede: Pocitos Central ▼", "Sede: Plaza Zabala (Principal) ▼", "Sede: Punta Carretas Shopping ▼", "Sede: Carrasco Este ▼"];
+      const label = document.getElementById('label-active-sede');
+      if (!label) return;
+      let currentIndex = sedes.indexOf(label.textContent);
+      let nextIndex = (currentIndex + 1) % sedes.length;
+      label.textContent = sedes[nextIndex];
+      showToast(`Sede activa: ${sedes[nextIndex].replace(' ▼', '')}`);
+    }
+
+    function toggleClientLiveService() {
+      isClientLiveActive = !isClientLiveActive;
+      const card = document.getElementById('client-live-card');
+      if (card) {
+        if (isClientLiveActive) {
+          card.classList.remove('inactive');
+          card.innerHTML = `
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+              <span class="badge-live-status">
+                <span class="live-pulsing-dot"></span> EN CAMINO • GPS EN VIVO
+              </span>
+              <button class="btn" style="background: rgba(255,255,255,0.18); color: white; font-size: 11px; padding: 4px 10px;" onclick="toggleClientLiveService()">
+                <i class="fas fa-sync-alt"></i> Alternar Estado
+              </button>
+            </div>
+            <div style="font-weight: 800; font-size: 16px; margin-bottom: 4px;">
+              Móvil #3 • Renault Kangoo SBV-1984 (Oficial Roberto Calvo)
+            </div>
+            <p style="font-size: 12px; opacity: 0.92; margin-bottom: 8px;">
+              Mantenimiento Preventivo y Auditoría Eléctrica MTSS en curso para Pocitos Central.
+            </p>
+            <div style="font-size: 13px; color: #BAE6FD; font-weight: 700; margin-bottom: 14px;">
+              <i class="fas fa-stopwatch"></i> Tiempo estimado de llegada: <strong>14 min</strong> (Bvar. Artigas y Rivera)
+            </div>
+            <button class="btn btn-accent" style="width: 100%; justify-content: center;" onclick="showToast('Rastreando posición GPS...')">
+              <i class="fas fa-map-marked-alt"></i> Seguir Recorrido GPS en Vivo
+            </button>
+          `;
+        } else {
+          card.classList.add('inactive');
+          card.innerHTML = `
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+              <span style="font-size: 11px; font-weight: 700; color: var(--gris-texto);"><i class="fas fa-clock"></i> SIN INTERVENCIONES EN CURSO</span>
+              <button class="btn btn-outline" style="font-size: 11px; padding: 4px 10px;" onclick="toggleClientLiveService()">
+                <i class="fas fa-truck-moving"></i> Despachar Técnico
+              </button>
+            </div>
+            <div style="font-weight: 700; color: var(--azul-marca); font-size: 14.5px;">No hay cuadrillas asignadas en ruta en este momento.</div>
+            <p style="font-size: 12px; color: var(--gris-texto); margin-top: 4px;">Cuando se despache una visita preventiva o guardia, podrás monitorear el vehículo aquí.</p>
+          `;
+        }
+      }
+    }
+
+    function approveBudget() {
+      const box = document.getElementById('budget-card-box');
+      if (box) {
+        box.style.borderLeft = "4px solid var(--verde-exito)";
+        box.innerHTML = `
+          <div style="font-size: 13.5px; font-weight: 700; color: var(--verde-exito); margin-bottom: 4px;">
+            <i class="fas fa-check-circle"></i> ¡Presupuesto COT-2026-884 Aprobado!
+          </div>
+          <p style="font-size: 12px; color: #475569;">
+            Se ha notificado a la Mesa de Control Central. Los materiales Schneider Electric han sido liberados del depósito y la cuadrilla se encuentra asignada.
+          </p>
+        `;
+      }
+      showToast("¡Presupuesto aprobado con éxito en 1 clic!");
+    }
+
+    function openExecutiveSummaryModal() {
+      openModal('modal-executive-summary');
+    }
+
+    function downloadExecutivePdf() {
+      closeModal('modal-executive-summary');
+      showToast("Descargando Resumen Ejecutivo Mensual (2 páginas A4 en PDF)...");
+    }
+
+    function submitClientRequest() {
+      const txt = document.getElementById('express-req-text').value.trim();
+      if (!txt) {
+        showToast("Por favor escriba la falla o solicitud.");
+        return;
+      }
+      document.getElementById('express-req-text').value = '';
+      showToast("¡Solicitud enviada con éxito! Mesa de Despacho confirmará la cuadrilla.");
+    }
+
+    function organizeRoute() {
+      const list = document.getElementById('tech-stops-list');
+      if (list) {
+        showToast("Ruta optimizada según tráfico en tiempo real entre Montevideo y Canelones.");
+      }
+    }
+
+    function simulateQrScan() {
+      showToast("Escaneando código QR de activo... Tablero Seccional Schneider identificado (#ACT-7712).");
+    }
+
+    function openFloatingA4ClosureModal() {
+      openModal('modal-floating-a4');
+    }
+
+    function initClosureSignature() {
+      closureCanvas = document.getElementById('closure-signature-canvas');
+      if (!closureCanvas) return;
+      closureCtx = closureCanvas.getContext('2d');
+      closureCtx.lineWidth = 2.5;
+      closureCtx.lineCap = 'round';
+      closureCtx.strokeStyle = '#102C54';
+
+      // Mouse
+      closureCanvas.onmousedown = (e) => { isDrawing = true; closureCtx.beginPath(); closureCtx.moveTo(e.offsetX, e.offsetY); };
+      closureCanvas.onmousemove = (e) => { if (isDrawing) { closureCtx.lineTo(e.offsetX, e.offsetY); closureCtx.stroke(); hasSigned = true; } };
+      window.onmouseup = () => { isDrawing = false; };
+
+      // Touch
+      closureCanvas.ontouchstart = (e) => {
+        e.preventDefault();
+        const r = closureCanvas.getBoundingClientRect();
+        const t = e.touches[0];
+        isDrawing = true;
+        closureCtx.beginPath();
+        closureCtx.moveTo(t.clientX - r.left, t.clientY - r.top);
+      };
+      closureCanvas.ontouchmove = (e) => {
+        e.preventDefault();
+        if (isDrawing) {
+          const r = closureCanvas.getBoundingClientRect();
+          const t = e.touches[0];
+          closureCtx.lineTo(t.clientX - r.left, t.clientY - r.top);
+          closureCtx.stroke();
+          hasSigned = true;
+        }
+      };
+      closureCanvas.ontouchend = () => { isDrawing = false; };
+    }
+
+    function clearClosureSignature() {
+      if (closureCtx && closureCanvas) {
+        closureCtx.clearRect(0, 0, closureCanvas.width, closureCanvas.height);
+        hasSigned = false;
+      }
+    }
+
+    function setRating(stars) {
+      showToast(`Calificación asignada: ${stars} estrellas.`);
+    }
+
+    function toggleSatisfactionChip(btn) {
+      btn.classList.toggle('btn-primary');
+      btn.classList.toggle('btn-outline');
+    }
+
+    function finalizeClosureSheet() {
+      closeModal('modal-floating-a4');
+      showToast("¡Orden de trabajo finalizada y certificada en Hoja A4 con doble firma!");
+    }
+
+    // --------------------------------------------------------------------------
+    // 6. BOTTOM NAVIGATION BAR HANDLER
+    // --------------------------------------------------------------------------
+    function handleBottomTab(tabId) {
+      document.querySelectorAll('.nav-tab-btn').forEach(b => b.classList.remove('active'));
+      const activeBtn = document.getElementById('tab-' + tabId);
+      if (activeBtn) activeBtn.classList.add('active');
+
+      if (tabId === 'inicio') {
+        if (currentActiveScreen === 'login') navigateToScreen('admin');
+      } else if (tabId === 'operaciones') {
+        navigateToScreen('tech');
+        showToast("Vista Operativa de Técnico de Campo.");
+      } else if (tabId === 'reportes') {
+        navigateToScreen('client');
+        showToast("Vista de Reportes y Cliente Corporativo.");
+      } else if (tabId === 'mas') {
+        navigateToScreen('admin');
+        showToast("Consola Central de Administrador.");
+      }
+    }
+
+    function handleFabAction() {
+      if (currentActiveScreen === 'admin') {
+        openCreateUserModal();
+      } else if (currentActiveScreen === 'client') {
+        const txt = document.getElementById('express-req-text');
+        if (txt) { txt.scrollIntoView({ behavior: 'smooth', block: 'center' }); txt.focus(); }
+        showToast("Ingrese el requerimiento para solicitar asistencia técnica.");
+      } else {
+        openFloatingA4ClosureModal();
+      }
+    }
+
+    // --------------------------------------------------------------------------
+    // UTILIDADES
+    // --------------------------------------------------------------------------
+    function openModal(id) {
+      const el = document.getElementById(id);
+      if (el) el.classList.add('active');
+    }
+
+    function closeModal(id) {
+      const el = document.getElementById(id);
+      if (el) el.classList.remove('active');
+    }
+
+    let _leafletMapInstance = null;
+    function openRealStreetMap(title, subtitle) {
+      if (title) document.getElementById('real-map-title').textContent = title;
+      if (subtitle) document.getElementById('real-map-subtitle').textContent = subtitle;
+      openModal('modal-real-gps-map');
+      
+      setTimeout(() => {
+        const container = document.getElementById('live-leaflet-map-container');
+        if (!container) return;
+        if (!_leafletMapInstance) {
+          _leafletMapInstance = L.map('live-leaflet-map-container', {
+            center: [-34.9080, -56.1650],
+            zoom: 14,
+            zoomControl: true
+          });
+          L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '© OpenStreetMap'
+          }).addTo(_leafletMapInstance);
+
+          // Geocerca Sede Pocitos Central (Círculo perimetral)
+          L.circle([-34.9145, -56.1520], {
+            color: '#00897B',
+            fillColor: '#00897B',
+            fillOpacity: 0.18,
+            radius: 80,
+            weight: 2,
+            dashArray: '6, 5'
+          }).addTo(_leafletMapInstance).bindPopup('<b>🏢 Sede Pocitos Central</b><br>21 de Setiembre 2840');
+
+          // Móvil Técnico en camino
+          const vanIcon = L.divIcon({
+            className: 'custom-div-icon',
+            html: '<div style="background:#0284C7; color:#fff; width:34px; height:34px; border-radius:50%; border:2.5px solid #fff; display:flex; align-items:center; justify-content:center; font-size:14px; box-shadow:0 4px 10px rgba(2,132,199,0.5);">🚐</div>',
+            iconSize: [34, 34],
+            iconAnchor: [17, 17]
+          });
+          L.marker([-34.8980, -56.1680], { icon: vanIcon }).addTo(_leafletMapInstance).bindPopup('<b>Oficial Roberto Calvo</b><br>Renault Kangoo SBV-1984<br>ETA: 14 min');
+        } else {
+          _leafletMapInstance.invalidateSize();
+        }
+      }, 250);
+    }
+
+    function solicitarMaterialesLimpieza(edificio) {
+      const edif = edificio || 'el servicio de limpieza';
+      const mensaje = `Hola Camilo, buenas tardes. Te escribo desde el servicio de limpieza en ${edif}. Me estoy quedando con poco material de limpieza y quería pedirte si es posible coordinar la reposición de insumos cuando puedas. Muchas gracias. Saludos, Funcionaria de Limpieza.`;
+      const url = `https://wa.me/59895800458?text=${encodeURIComponent(mensaje)}`;
+      window.open(url, '_blank');
+      showToast('Abriendo WhatsApp con Camilo (+598 95 800 458)...');
+    }
+
+    function showToast(msg) {
+      const t = document.getElementById('toast-notification');
+      if (t) {
+        t.textContent = msg;
+        t.style.display = 'flex';
+        clearTimeout(window._toastTimeout);
+        window._toastTimeout = setTimeout(() => {
+          t.style.display = 'none';
+        }, 3600);
+      }
+    }
+
+    function downloadLatestApk() {
+      const timestamp = Date.now();
+      const apkUrl = '/Todoservicio.apk?v=' + timestamp;
+      const downloadLink = document.createElement('a');
+      downloadLink.href = apkUrl;
+      downloadLink.download = 'Todoservicio.apk';
+      document.body.appendChild(downloadLink);
+      downloadLink.click();
+      document.body.removeChild(downloadLink);
+      showToast('Iniciando descarga de la última versión...');
+    }
+  </script>
+
+  <!-- Botón discreto de descarga abajo a la derecha: sin palabras, solo icono en tono gris sutil -->
+  <button id="btn-floating-download-apk" onclick="downloadLatestApk()" title="Descargar última versión" aria-label="Descargar última versión">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+      <polyline points="7 10 12 15 17 10"></polyline>
+      <line x1="12" y1="15" x2="12" y2="3"></line>
+    </svg>
+  </button>
+
+  <style>
+    #btn-floating-download-apk {
+      position: fixed;
+      bottom: 22px;
+      right: 18px;
+      width: 42px;
+      height: 42px;
+      border-radius: 50%;
+      background: rgba(148, 163, 184, 0.22);
+      color: #64748B;
+      border: 1px solid rgba(203, 213, 225, 0.5);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      z-index: 999999;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+      transition: all 0.2s ease;
+    }
+    #btn-floating-download-apk:hover {
+      background: rgba(148, 163, 184, 0.4);
+      color: #334155;
+      transform: scale(1.08);
+    }
+    #btn-floating-download-apk:active {
+      transform: scale(0.92);
+    }
+  </style>
+</body>
+</html>

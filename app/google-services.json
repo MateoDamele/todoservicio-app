@@ -1,0 +1,35 @@
+{
+  "project_info": {
+    "project_number": "620552912037",
+    "project_id": "todoservicio-uy-prod",
+    "storage_bucket": "todoservicio-uy-prod.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:620552912037:android:todoserviciouy12345",
+        "android_client_info": {
+          "package_name": "com.aistudio.todoservicio.uyfm"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyTodoservicioMapsUruguayKey2026"
+        }
+      ],
+      "services": {
+        "analytics_service": {
+          "status": 1
+        },
+        "appinvite_service": {
+          "status": 1
+        },
+        "ads_service": {
+          "status": 2
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
