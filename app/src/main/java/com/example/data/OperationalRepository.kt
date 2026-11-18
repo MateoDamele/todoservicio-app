@@ -847,11 +847,19 @@ object OperationalRepository {
      */
     fun init(context: Context) {
         LocalDatabaseStore.init(context.applicationContext)
+        reloadOperationalFromStore()
+        SupabaseCloudSync.startLiveSync(
+            onOperationalUpdated = { reloadOperationalFromStore() },
+            onAuthUpdated = { AuthRepository.reloadFromStore() },
+            onCleaningUpdated = { CleaningRepository.init(context.applicationContext) }
+        )
+    }
+
+    @Synchronized
+    fun reloadOperationalFromStore() {
         val persisted = LocalDatabaseStore.loadOperationalSnapshot()
         if (persisted != null) {
-            synchronized(this) {
-                _globalOrderCounter = persisted.globalOrderCounter
-            }
+            _globalOrderCounter = maxOf(_globalOrderCounter, persisted.globalOrderCounter)
             _corporateClients.value = persisted.corporateClients
             _quotes.value = persisted.quotes
             _operationalTasks.value = persisted.operationalTasks
@@ -872,7 +880,7 @@ object OperationalRepository {
             _npsRatings.value = persisted.npsRatings
             _ratingDetails.value = persisted.ratingDetails
             _announcements.value = persisted.announcements
-        } else {
+        } else if (!_masterCatalogInitialized) {
             _masterServices.value = defaultMasterServices()
             _masterCatalogInitialized = true
         }
@@ -899,6 +907,9 @@ object OperationalRepository {
             ratingDetails = _ratingDetails.value,
             announcements = _announcements.value
         )
+        LocalDatabaseStore.saveOperationalSnapshot(snapshot)
+    }
+}
         LocalDatabaseStore.saveOperationalSnapshot(snapshot)
     }
 }
