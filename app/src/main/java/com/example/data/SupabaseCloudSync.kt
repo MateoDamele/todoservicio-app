@@ -8,6 +8,7 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.Executors
+import java.util.concurrent.ScheduledFuture
 import java.util.concurrent.TimeUnit
 
 object SupabaseCloudSync {
@@ -18,7 +19,20 @@ object SupabaseCloudSync {
         .build()
 
     private val syncExecutor = Executors.newSingleThreadExecutor()
+    private val pollingScheduler = Executors.newSingleThreadScheduledExecutor()
     private val jsonMediaType = "application/json; charset=utf-8".toMediaType()
+
+    @Volatile
+    private var pollingTask: ScheduledFuture<*>? = null
+
+    @Volatile
+    private var lastOperationalHash: Int = 0
+
+    @Volatile
+    private var lastAuthHash: Int = 0
+
+    @Volatile
+    private var lastCleaningHash: Int = 0
 
     private fun baseUrl(): String = BuildConfig.SUPABASE_URL.trim().removeSuffix("/")
     private fun anonKey(): String = BuildConfig.SUPABASE_ANON_KEY.trim()
@@ -31,6 +45,7 @@ object SupabaseCloudSync {
 
     fun pushStateJson(storeKey: String, rawJson: String) {
         if (!isConfigured()) return
+        updateLocalHash(storeKey, rawJson.hashCode())
         syncExecutor.execute {
             try {
                 val wrapper = JSONObject().apply {
@@ -72,10 +87,52 @@ object SupabaseCloudSync {
                 if (array.length() == 0) return null
                 val payloadObj = array.getJSONObject(0).optJSONObject("payload") ?: return null
                 if (payloadObj.length() == 0) return null
-                payloadObj.toString()
+                val jsonStr = payloadObj.toString()
+                updateLocalHash(storeKey, jsonStr.hashCode())
+                jsonStr
             }
         } catch (_: Exception) {
             null
         }
+    }
+
+    private fun updateLocalHash(storeKey: String, hash: Int) {
+        when (storeKey) {
+            "operational_snapshot" -> lastOperationalHash = hash
+            "auth_snapshot" -> lastAuthHash = hash
+            "cleaning_snapshot" -> lastCleaningHash = hash
+        }
+    }
+
+    @Synchronized
+    fun startLiveSync(
+        onOperationalUpdated: () -> Unit,
+        onAuthUpdated: () -> Unit,
+        onCleaningUpdated: () -> Unit
+    ) {
+        if (!isConfigured() || pollingTask != null) return
+
+        pollingTask = pollingScheduler.scheduleWithFixedDelay({
+            try {
+                val prevOp = lastOperationalHash
+                val opJson = pullStateJson("operational_snapshot")
+                if (!opJson.isNullOrBlank() && opJson.hashCode() != prevOp) {
+                    onOperationalUpdated()
+                }
+
+                val prevAuth = lastAuthHash
+                val authJson = pullStateJson("auth_snapshot")
+                if (!authJson.isNullOrBlank() && authJson.hashCode() != prevAuth) {
+                    onAuthUpdated()
+                }
+
+                val prevClean = lastCleaningHash
+                val cleanJson = pullStateJson("cleaning_snapshot")
+                if (!cleanJson.isNullOrBlank() && cleanJson.hashCode() != prevClean) {
+                    onCleaningUpdated()
+                }
+            } catch (_: Exception) {
+            }
+        }, 5L, 5L, TimeUnit.SECONDS)
     }
 }
