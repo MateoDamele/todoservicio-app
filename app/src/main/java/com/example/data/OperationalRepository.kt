@@ -32,8 +32,9 @@ import java.util.Date
 import java.util.Locale
 
 /**
-- Repositorio Central de Operaciones, Clientes, Cotizaciones y Reportes de Todoservicio.
-- Respaldado por persistencia SQLite cifrada (LocalDatabaseStore) sincronizada en vivo con Supabase.
+ * Repositorio Central de Operaciones, Clientes, Cotizaciones y Reportes de Todoservicio.
+ * Respaldado por persistencia SQLite cifrada (LocalDatabaseStore) para conservar clientes,
+ * logotipos, sedes, órdenes y correlativo global OT-0001+ sin pérdida al reiniciar.
  */
 object OperationalRepository {
 
@@ -236,8 +237,8 @@ object OperationalRepository {
     // ========================================================================
     // 2.1 CHAT EN TIEMPO REAL POR ORDEN DE TRABAJO ACTIVA (CLIENTE <-> TÉCNICO)
     // ========================================================================
-    private val _serviceChatMessages = MutableStateFlow>>(emptyMap())
-    val serviceChatMessages: StateFlow>> = _serviceChatMessages.asStateFlow()
+    private val _serviceChatMessages = MutableStateFlow<Map<String, List<ServiceChatMessage>>>(emptyMap())
+    val serviceChatMessages: StateFlow<Map<String, List<ServiceChatMessage>>> = _serviceChatMessages.asStateFlow()
 
     fun isTaskChatActive(task: OperationalTask?): Boolean {
         if (task == null) return false
@@ -352,6 +353,11 @@ object OperationalRepository {
         persistOperational()
     }
 
+    /**
+     * ETAPA 1 (TÉCNICO): Iniciar Traslado (En Camino).
+     * Activa tracking exclusivo para el clientId de esta OT, calcula distancia real inicial
+     * y dispara notificación push dirigida únicamente a ese cliente asignado.
+     */
     fun startTechnicianTransit(
         context: Context?,
         orderCode: String,
@@ -364,6 +370,7 @@ object OperationalRepository {
         val resolvedClientId = task?.clientId.orEmpty()
         val resolvedClientName = task?.clientName.orEmpty()
 
+        // Resolver coordenadas reales del cliente/sede desde corporateClients
         val matchedClient = _corporateClients.value.firstOrNull { client ->
             (resolvedClientId.isNotBlank() && client.id == resolvedClientId) ||
                 (resolvedClientName.isNotBlank() && client.name.equals(resolvedClientName, ignoreCase = true))
@@ -437,6 +444,9 @@ object OperationalRepository {
         persistOperational()
     }
 
+    /**
+     * Actualiza en tiempo real las coordenadas GPS y ETA del técnico únicamente mientras está En Camino.
+     */
     fun updateTechnicianLiveGps(
         orderCode: String,
         lat: Double,
@@ -474,6 +484,10 @@ object OperationalRepository {
         )
     }
 
+    /**
+     * ETAPA 2 (TÉCNICO): Llegué al Sitio (Check-in).
+     * Registra la hora exacta de entrada y detiene la alerta de traslado activo.
+     */
     fun markTechnicianCheckIn(orderCode: String, checkInTimeFormatted: String) {
         _operationalTasks.value = _operationalTasks.value.map { task ->
             if (task.code == orderCode) {
@@ -499,6 +513,10 @@ object OperationalRepository {
         persistOperational()
     }
 
+    /**
+     * ETAPA 3 (TÉCNICO): Finalizar Trabajo (Check-out) con cierre oficial A4.
+     * Registra hora de salida, desconecta tracking GPS del cliente y guarda el reporte final.
+     */
     fun completeTechnicianCheckOut(
         orderCode: String,
         checkOutTimeFormatted: String,
@@ -695,11 +713,11 @@ object OperationalRepository {
     // ========================================================================
     // 8. SOLICITUDES DE CLIENTE Y CALIFICACIONES 5 ESTRELLAS
     // ========================================================================
-    private val _npsRatings = MutableStateFlow>(emptyMap())
-    val npsRatings: StateFlow> = _npsRatings.asStateFlow()
+    private val _npsRatings = MutableStateFlow<Map<String, Int>>(emptyMap())
+    val npsRatings: StateFlow<Map<String, Int>> = _npsRatings.asStateFlow()
 
-    private val _ratingDetails = MutableStateFlow>(emptyMap())
-    val ratingDetails: StateFlow> = _ratingDetails.asStateFlow()
+    private val _ratingDetails = MutableStateFlow<Map<String, ServiceRatingRecord>>(emptyMap())
+    val ratingDetails: StateFlow<Map<String, ServiceRatingRecord>> = _ratingDetails.asStateFlow()
 
     fun submitNpsRating(orderCode: String, stars: Int, comment: String) {
         val cleanStars = stars.coerceIn(1, 5)
@@ -825,24 +843,15 @@ object OperationalRepository {
     }
 
     /**
-- Inicializa y restaura todo el estado operativo y contador global desde SQLite y Supabase.
+     * Inicializa y restaura todo el estado operativo y contador global desde SQLite.
      */
     fun init(context: Context) {
-        val appCtx = context.applicationContext
-        LocalDatabaseStore.init(appCtx)
-        reloadOperationalFromStore()
-        SupabaseCloudSync.startLiveSync(
-            onOperationalUpdated = { reloadOperationalFromStore() },
-            onAuthUpdated = { AuthRepository.reloadFromStore() },
-            onCleaningUpdated = { CleaningRepository.init(appCtx) }
-        )
-    }
-
-    @Synchronized
-    fun reloadOperationalFromStore() {
+        LocalDatabaseStore.init(context.applicationContext)
         val persisted = LocalDatabaseStore.loadOperationalSnapshot()
         if (persisted != null) {
-            _globalOrderCounter = maxOf(_globalOrderCounter, persisted.globalOrderCounter)
+            synchronized(this) {
+                _globalOrderCounter = persisted.globalOrderCounter
+            }
             _corporateClients.value = persisted.corporateClients
             _quotes.value = persisted.quotes
             _operationalTasks.value = persisted.operationalTasks
@@ -863,7 +872,7 @@ object OperationalRepository {
             _npsRatings.value = persisted.npsRatings
             _ratingDetails.value = persisted.ratingDetails
             _announcements.value = persisted.announcements
-        } else if (!_masterCatalogInitialized) {
+        } else {
             _masterServices.value = defaultMasterServices()
             _masterCatalogInitialized = true
         }
