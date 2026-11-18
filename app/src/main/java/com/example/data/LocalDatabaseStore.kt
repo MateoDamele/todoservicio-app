@@ -4,6 +4,7 @@ import android.content.ContentValues
 import android.content.Context
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
+import android.graphics.Bitmap
 import android.net.Uri
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
@@ -20,7 +21,6 @@ import com.example.model.MasterServiceCatalogItem
 import com.example.model.MetricCheckInRecord
 import com.example.model.OperationalTask
 import com.example.model.PendingQuote
-import android.graphics.Bitmap
 import com.example.model.ServiceChatMessage
 import com.example.model.ServiceHistoryItem
 import com.example.model.ServiceRatingRecord
@@ -95,9 +95,8 @@ data class PersistedCleaningSnapshot(
 )
 
 /**
- * Capa de persistencia local real basada en SQLite + Cifrado AES-256 GCM (Android KeyStore).
- * Garantiza conservación íntegra de usuarios, contraseñas, clientes, logotipos,
- * órdenes con correlativo global OT-0001+ y registros de limpieza ante cierres o reinicios.
+- Capa de persistencia local real basada en SQLite + Cifrado AES-256 GCM (Android KeyStore)
+- sincronizada con Supabase (SupabaseCloudSync).
  */
 object LocalDatabaseStore {
 
@@ -251,6 +250,7 @@ object LocalDatabaseStore {
         try {
             val json = authAdapter.toJson(snapshot)
             saveJsonRecord(KEY_AUTH, json)
+            SupabaseCloudSync.pushStateJson(KEY_AUTH, json)
         } catch (_: Exception) {
         }
     }
@@ -263,6 +263,17 @@ object LocalDatabaseStore {
     }
 
     fun loadAuthSnapshot(): PersistedAuthSnapshot? {
+        val remoteJson = SupabaseCloudSync.pullStateJson(KEY_AUTH)
+        if (!remoteJson.isNullOrBlank()) {
+            try {
+                val remoteSnapshot = authAdapter.fromJson(remoteJson)
+                if (remoteSnapshot != null && remoteSnapshot.users.isNotEmpty()) {
+                    saveJsonRecord(KEY_AUTH, remoteJson)
+                    return remoteSnapshot
+                }
+            } catch (_: Exception) {
+            }
+        }
         val json = loadJsonRecord(KEY_AUTH) ?: return null
         return try {
             authAdapter.fromJson(json)
@@ -275,11 +286,23 @@ object LocalDatabaseStore {
         try {
             val json = operationalAdapter.toJson(snapshot)
             saveJsonRecord(KEY_OPERATIONAL, json)
+            SupabaseCloudSync.pushStateJson(KEY_OPERATIONAL, json)
         } catch (_: Exception) {
         }
     }
 
     fun loadOperationalSnapshot(): PersistedOperationalSnapshot? {
+        val remoteJson = SupabaseCloudSync.pullStateJson(KEY_OPERATIONAL)
+        if (!remoteJson.isNullOrBlank()) {
+            try {
+                val remoteSnapshot = operationalAdapter.fromJson(remoteJson)
+                if (remoteSnapshot != null) {
+                    saveJsonRecord(KEY_OPERATIONAL, remoteJson)
+                    return remoteSnapshot
+                }
+            } catch (_: Exception) {
+            }
+        }
         val json = loadJsonRecord(KEY_OPERATIONAL) ?: return null
         return try {
             operationalAdapter.fromJson(json)
@@ -292,11 +315,23 @@ object LocalDatabaseStore {
         try {
             val json = cleaningAdapter.toJson(snapshot)
             saveJsonRecord(KEY_CLEANING, json)
+            SupabaseCloudSync.pushStateJson(KEY_CLEANING, json)
         } catch (_: Exception) {
         }
     }
 
     fun loadCleaningSnapshot(): PersistedCleaningSnapshot? {
+        val remoteJson = SupabaseCloudSync.pullStateJson(KEY_CLEANING)
+        if (!remoteJson.isNullOrBlank()) {
+            try {
+                val remoteSnapshot = cleaningAdapter.fromJson(remoteJson)
+                if (remoteSnapshot != null) {
+                    saveJsonRecord(KEY_CLEANING, remoteJson)
+                    return remoteSnapshot
+                }
+            } catch (_: Exception) {
+            }
+        }
         val json = loadJsonRecord(KEY_CLEANING) ?: return null
         return try {
             cleaningAdapter.fromJson(json)
@@ -306,8 +341,8 @@ object LocalDatabaseStore {
     }
 
     /**
-     * Copia una imagen seleccionada mediante Photo Picker al almacenamiento privado de la app
-     * para garantizar que avatares y logotipos sobrevivan al cierre o reinicio del dispositivo.
+- Copia una imagen seleccionada mediante Photo Picker al almacenamiento privado de la app
+- para garantizar que avatares y logotipos sobrevivan al cierre o reinicio del dispositivo.
      */
     fun persistPickedImageUri(context: Context, sourceUri: Uri): String {
         return try {
@@ -331,7 +366,7 @@ object LocalDatabaseStore {
     }
 
     /**
-     * Guarda una captura Bitmap tomada desde la cámara en el almacenamiento privado persistente.
+- Guarda una captura Bitmap tomada desde la cámara en el almacenamiento privado persistente.
      */
     fun persistCapturedBitmap(context: Context, bitmap: Bitmap): String? {
         return try {
