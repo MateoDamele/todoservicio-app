@@ -21,8 +21,14 @@ android {
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-    buildConfigField("String", "SUPABASE_URL", "\"${System.getenv("SUPABASE_URL") ?: ""}\"")
-    buildConfigField("String", "SUPABASE_ANON_KEY", "\"${System.getenv("SUPABASE_ANON_KEY") ?: ""}\"")
+    val envProps = java.util.Properties().apply {
+      val f = rootProject.file(".env")
+      if (f.exists()) f.inputStream().use { load(it) }
+    }
+    val supaUrl = (envProps.getProperty("SUPABASE_URL") ?: System.getenv("SUPABASE_URL") ?: "").trim().trim('"')
+    val supaKey = (envProps.getProperty("SUPABASE_ANON_KEY") ?: System.getenv("SUPABASE_ANON_KEY") ?: "").trim().trim('"')
+    buildConfigField("String", "SUPABASE_URL", "\"$supaUrl\"")
+    buildConfigField("String", "SUPABASE_ANON_KEY", "\"$supaKey\"")
   }
 
   // Do not remove or modify these signingConfigs. They are necessary for building, installing,
@@ -87,6 +93,8 @@ secrets {
   propertiesFileName = ".env"
   defaultPropertiesFileName = ".env.example"
   ignoreList.add("FIREBASE_APPCHECK_DEBUG_TOKEN")
+  ignoreList.add("SUPABASE_URL")
+  ignoreList.add("SUPABASE_ANON_KEY")
 }
 
 googleServices { missingGoogleServicesStrategy = MissingGoogleServicesStrategy.WARN }
