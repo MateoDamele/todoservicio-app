@@ -94,10 +94,6 @@ data class PersistedCleaningSnapshot(
     val activeShift: CleaningRepository.ActiveShiftState = CleaningRepository.ActiveShiftState()
 )
 
-/**
-- Capa de persistencia local real basada en SQLite + Cifrado AES-256 GCM (Android KeyStore)
-- sincronizada en vivo con Supabase (SupabaseCloudSync).
- */
 object LocalDatabaseStore {
 
     private const val DB_NAME = "todoservicio_enterprise_v1.db"
@@ -152,13 +148,7 @@ object LocalDatabaseStore {
             ensureKeyStoreKey()
             SupabaseCloudSync.startLiveSync(
                 onOperationalUpdated = {
-                    val json = loadJsonRecord(KEY_OPERATIONAL)
-                    if (!json.isNullOrBlank()) {
-                        try {
-                            val snap = operationalAdapter.fromJson(json)
-                            if (snap != null) OperationalRepository.init(appCtx)
-                        } catch (_: Exception) {}
-                    }
+                    try { OperationalRepository.init(appCtx) } catch (_: Exception) {}
                 },
                 onAuthUpdated = {
                     try { AuthRepository.init(appCtx) } catch (_: Exception) {}
@@ -190,7 +180,6 @@ object LocalDatabaseStore {
                 keyGenerator.generateKey()
             }
         } catch (_: Exception) {
-            // Fallback handled transparently during encrypt/decrypt
         }
     }
 
@@ -231,7 +220,6 @@ object LocalDatabaseStore {
                     SQLiteDatabase.CONFLICT_REPLACE
                 )
             } catch (_: Exception) {
-                // Safe non-fatal storage guard
             }
         }
     }
@@ -358,10 +346,6 @@ object LocalDatabaseStore {
         }
     }
 
-    /**
-- Copia una imagen seleccionada mediante Photo Picker al almacenamiento privado de la app
-- para garantizar que avatares y logotipos sobrevivan al cierre o reinicio del dispositivo.
-     */
     fun persistPickedImageUri(context: Context, sourceUri: Uri): String {
         return try {
             val mediaDir = File(context.filesDir, "persisted_media").apply {
@@ -383,9 +367,6 @@ object LocalDatabaseStore {
         }
     }
 
-    /**
-- Guarda una captura Bitmap tomada desde la cámara en el almacenamiento privado persistente.
-     */
     fun persistCapturedBitmap(context: Context, bitmap: Bitmap): String? {
         return try {
             val mediaDir = File(context.filesDir, "persisted_media").apply {
