@@ -16,8 +16,9 @@ import com.example.model.TaskOperationStatus
 import com.example.model.UserAccount
 import com.example.model.UserRole
 import com.squareup.moshi.Moshi
-import com.squareup.moshi.Types
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
+import org.json.JSONArray
+import org.json.JSONObject
 import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.io.OutputStreamWriter
@@ -33,11 +34,6 @@ import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledFuture
 import java.util.concurrent.TimeUnit
 
-/**
- * Sincronización bidireccional directa entre la app Android y las tablas relacionales
- * de Supabase compartidas con el panel web en Vercel (clients, sedes, work_orders,
- * profiles, service_catalog, announcements, cleaning_logs).
- */
 object SupabaseCloudSync {
 
     private const val TABLE_SYNC = "todoservicio_sync_state"
@@ -52,19 +48,6 @@ object SupabaseCloudSync {
     private val authAdapter = moshi.adapter(PersistedAuthSnapshot::class.java)
     private val operationalAdapter = moshi.adapter(PersistedOperationalSnapshot::class.java)
     private val cleaningAdapter = moshi.adapter(PersistedCleaningSnapshot::class.java)
-
-    private val mapType = Types.newParameterizedType(
-        Map::class.java,
-        String::class.java,
-        Any::class.java
-    )
-    private val mapAdapter = moshi.adapter>(mapType)
-
-    private val listMapType = Types.newParameterizedType(
-        List::class.java,
-        mapType
-    )
-    private val listMapAdapter = moshi.adapter<List>>(listMapType)
 
     fun isConfigured(): Boolean {
         val url = BuildConfig.SUPABASE_URL.trim()
@@ -95,8 +78,8 @@ object SupabaseCloudSync {
         TaskOperationStatus.FINALIZADA -> "finalizada"
     }
 
-    private fun mapStatusFromWeb(raw: String?): TaskOperationStatus {
-        val norm = raw.orEmpty().trim().lowercase(Locale.ROOT)
+    private fun mapStatusFromWeb(raw: String): TaskOperationStatus {
+        val norm = raw.trim().lowercase(Locale.ROOT)
         return when {
             norm.contains("final") || norm.contains("complet") || norm.contains("cerrad") ->
                 TaskOperationStatus.FINALIZADA
@@ -114,8 +97,8 @@ object SupabaseCloudSync {
         UserRole.CLIENTE -> "cliente"
     }
 
-    private fun mapRoleFromWeb(raw: String?): UserRole {
-        val norm = raw.orEmpty().trim().lowercase(Locale.ROOT)
+    private fun mapRoleFromWeb(raw: String): UserRole {
+        val norm = raw.trim().lowercase(Locale.ROOT)
         return when {
             norm.contains("super") -> UserRole.SUPERADMIN
             norm.contains("admin") -> UserRole.ADMIN
@@ -131,8 +114,8 @@ object SupabaseCloudSync {
         AnnouncementPriority.BAJO -> "bajo"
     }
 
-    private fun mapPriorityFromWeb(raw: String?): AnnouncementPriority {
-        val norm = raw.orEmpty().trim().lowercase(Locale.ROOT)
+    private fun mapPriorityFromWeb(raw: String): AnnouncementPriority {
+        val norm = raw.trim().lowercase(Locale.ROOT)
         return when {
             norm.contains("import") || norm.contains("alta") || norm.contains("high") ->
                 AnnouncementPriority.IMPORTANTE
@@ -142,7 +125,23 @@ object SupabaseCloudSync {
         }
     }
 
-    private fun httpGetList(pathWithQuery: String): List>? {
+    private fun JSONObject.optCleanString(key: String, fallback: String = ""): String {
+        if (!has(key) || isNull(key)) return fallback
+        val v = optString(key, fallback)
+        return if (v == "null") fallback else v
+    }
+
+    private fun JSONObject.optStringList(key: String): List<String> {
+        val arr = optJSONArray(key) ?: return emptyList()
+        val result = ArrayList<String>(arr.length())
+        for (i in 0 until arr.length()) {
+            val item = arr.optString(i, "")
+            if (item.isNotBlank() && item != "null") result.add(item)
+        }
+        return result
+    }
+
+    private fun httpGetArray(pathWithQuery: String): JSONArray? {
         if (!isConfigured()) return null
         return try {
             val url = URL("${baseUrl()}/rest/v1/$pathWithQuery")
@@ -159,16 +158,16 @@ object SupabaseCloudSync {
             val body = stream?.use { BufferedReader(InputStreamReader(it, Charsets.UTF_8)).readText() }.orEmpty()
             conn.disconnect()
             if (code !in 200..299 || body.isBlank()) return null
-            listMapAdapter.fromJson(body)
+            JSONArray(body)
         } catch (_: Exception) {
             null
         }
     }
 
-    private fun httpUpsertRows(table: String, rows: List>, conflictCol: String = "id"): Boolean {
-        if (!isConfigured() || rows.isEmpty()) return false
+    private fun httpUpsertArray(table: String, rows: JSONArray, conflictCol: String = "id"): Boolean {
+        if (!isConfigured() || rows.length() == 0) return false
         return try {
-            val payload = listMapAdapter.toJson(rows)
+            val payload = rows.toString()
             val url = URL("${baseUrl()}/rest/v1/$table?on_conflict=$conflictCol")
             val conn = (url.openConnection() as HttpURLConnection).apply {
                 requestMethod = "POST"
@@ -193,43 +192,31 @@ object SupabaseCloudSync {
     }
 
     private fun pullSyncStatePayload(storeKey: String): String? {
-        val rows = httpGetList("$TABLE_SYNC?store_key=eq.$storeKey&select=payload&limit=1") ?: return null
-        val payloadObj = rows.firstOrNull()?.get("payload") ?: return null
+        val arr = httpGetArray("$TABLE_SYNC?store_key=eq.$storeKey&select=payload&limit=1") ?: return null
+        if (arr.length() == 0) return null
+        val row = arr.optJSONObject(0) ?: return null
+        val payloadObj = row.opt("payload") ?: return null
         return when (payloadObj) {
+            is JSONObject -> payloadObj.toString()
             is String -> payloadObj
-            is Map<*, *> -> {
-                @Suppress("UNCHECKED_CAST")
-                mapAdapter.toJson(payloadObj as Map<String, Any?>)
-            }
             else -> null
         }
     }
 
     private fun pushSyncStatePayload(storeKey: String, jsonState: String) {
-        val parsedMap = try {
-            mapAdapter.fromJson(jsonState)
+        try {
+            val parsedObj = JSONObject(jsonState)
+            val row = JSONObject().apply {
+                put("store_key", storeKey)
+                put("payload", parsedObj)
+                put("updated_at", isoNow())
+            }
+            val arr = JSONArray().apply { put(row) }
+            httpUpsertArray(TABLE_SYNC, arr, "store_key")
         } catch (_: Exception) {
-            null
-        } ?: return
-
-        httpUpsertRows(
-            table = TABLE_SYNC,
-            rows = listOf(
-                mapOf(
-                    "store_key" to storeKey,
-                    "payload" to parsedMap,
-                    "updated_at" to isoNow()
-                )
-            ),
-            conflictCol = "store_key"
-        )
+        }
     }
 
-    /**
-     * Descarga el estado desde las tablas reales de la web en Supabase (clients, sedes,
-     * work_orders, profiles, service_catalog, announcements, cleaning_logs) y lo fusiona
-     * con los datos locales para la app Android.
-     */
     fun pullStateJson(storeKey: String): String? {
         if (!isConfigured()) return null
         val future = ioExecutor.submit(Callable<String?> {
@@ -247,10 +234,6 @@ object SupabaseCloudSync {
         }
     }
 
-    /**
-     * Publica los cambios locales tanto hacia las tablas relacionales de la web en Vercel
-     * como hacia todoservicio_sync_state.
-     */
     fun pushStateJson(storeKey: String, jsonState: String) {
         if (!isConfigured() || jsonState.isBlank()) return
         ioExecutor.execute {
@@ -272,92 +255,100 @@ object SupabaseCloudSync {
             try { operationalAdapter.fromJson(fallbackJson) } catch (_: Exception) { null }
         } else null
 
-        val webClients = httpGetList("clients?select=*&order=created_at.asc") ?: emptyList()
-        val webSedes = httpGetList("sedes?select=*") ?: emptyList()
-        val webOrders = httpGetList("work_orders?select=*&order=created_at.desc") ?: emptyList()
-        val webCatalog = httpGetList("service_catalog?select=*") ?: emptyList()
-        val webAnnouncements = httpGetList("announcements?select=*&order=created_at.desc") ?: emptyList()
-        val webProfiles = httpGetList("profiles?select=id,full_name,username") ?: emptyList()
+        val webClients = httpGetArray("clients?select=*&order=created_at.asc") ?: JSONArray()
+        val webSedes = httpGetArray("sedes?select=*") ?: JSONArray()
+        val webOrders = httpGetArray("work_orders?select=*&order=created_at.desc") ?: JSONArray()
+        val webCatalog = httpGetArray("service_catalog?select=*") ?: JSONArray()
+        val webAnnouncements = httpGetArray("announcements?select=*&order=created_at.desc") ?: JSONArray()
+        val webProfiles = httpGetArray("profiles?select=id,full_name,username") ?: JSONArray()
 
-        if (webClients.isEmpty() && webOrders.isEmpty() && webCatalog.isEmpty() && webAnnouncements.isEmpty()) {
+        if (webClients.length() == 0 && webOrders.length() == 0 &&
+            webCatalog.length() == 0 && webAnnouncements.length() == 0
+        ) {
             return fallbackJson
         }
 
-        val profileNameById = webProfiles.associate { row ->
-            val id = row["id"]?.toString().orEmpty()
-            val name = row["full_name"]?.toString()?.takeIf { it.isNotBlank() }
-                ?: row["username"]?.toString().orEmpty()
-            id to name
+        val profileNameById = HashMap<String, String>()
+        for (i in 0 until webProfiles.length()) {
+            val row = webProfiles.optJSONObject(i) ?: continue
+            val id = row.optCleanString("id")
+            val name = row.optCleanString("full_name").ifBlank { row.optCleanString("username") }
+            if (id.isNotBlank()) profileNameById[id] = name
         }
 
-        val sedesByClient = webSedes.groupBy { it["client_id"]?.toString().orEmpty() }
-        val sedeById = webSedes.associateBy { it["id"]?.toString().orEmpty() }
+        val sedesByClient = HashMap<String, MutableList<ClientBranch>>()
+        val sedeById = HashMap<String, JSONObject>()
+        for (i in 0 until webSedes.length()) {
+            val s = webSedes.optJSONObject(i) ?: continue
+            val sid = s.optCleanString("id")
+            val cid = s.optCleanString("client_id")
+            if (sid.isNotBlank()) sedeById[sid] = s
+            val branch = ClientBranch(
+                id = sid,
+                name = s.optCleanString("name"),
+                address = s.optCleanString("address"),
+                contactPerson = s.optCleanString("contact_name"),
+                phone = s.optCleanString("contact_phone"),
+                lat = s.optDouble("lat", -34.9011),
+                lng = s.optDouble("lng", -56.1645),
+                geofenceRadiusMeters = s.optInt("geofence_radius_meters", 100)
+            )
+            sedesByClient.getOrPut(cid) { mutableListOf() }.add(branch)
+        }
 
-        val mappedClients = if (webClients.isNotEmpty()) {
-            webClients.map { row ->
-                val cid = row["id"]?.toString().orEmpty()
-                val cname = row["name"]?.toString().orEmpty()
-                val visits = (row["plan_visits"] as? Number)?.toInt() ?: 8
-                val logo = row["logo_url"]?.toString()
-                val branches = sedesByClient[cid].orEmpty().map { s ->
-                    ClientBranch(
-                        id = s["id"]?.toString().orEmpty(),
-                        name = s["name"]?.toString().orEmpty(),
-                        address = s["address"]?.toString().orEmpty(),
-                        contactPerson = s["contact_name"]?.toString().orEmpty(),
-                        phone = s["contact_phone"]?.toString().orEmpty(),
-                        lat = (s["lat"] as? Number)?.toDouble() ?: -34.9011,
-                        lng = (s["lng"] as? Number)?.toDouble() ?: -56.1645,
-                        geofenceRadiusMeters = (s["geofence_radius_meters"] as? Number)?.toInt() ?: 100
+        val mappedClients = if (webClients.length() > 0) {
+            val list = ArrayList<CorporateClientAccount>(webClients.length())
+            for (i in 0 until webClients.length()) {
+                val row = webClients.optJSONObject(i) ?: continue
+                val cid = row.optCleanString("id")
+                val cname = row.optCleanString("name")
+                val visits = row.optInt("plan_visits", 8)
+                val logo = row.optCleanString("logo_url").ifBlank { null }
+                list.add(
+                    CorporateClientAccount(
+                        id = cid,
+                        name = cname,
+                        rut = "",
+                        planName = "Plan Corporativo ($visits Visitas)",
+                        clientColorHex = 0xFF1D4E89,
+                        branches = sedesByClient[cid].orEmpty(),
+                        logoUri = logo
                     )
-                }
-                CorporateClientAccount(
-                    id = cid,
-                    name = cname,
-                    rut = "",
-                    planName = "Plan Corporativo ($visits Visitas)",
-                    clientColorHex = 0xFF1D4E89,
-                    branches = branches,
-                    logoUri = logo
                 )
             }
+            list
         } else {
             baseSnapshot?.corporateClients.orEmpty()
         }
 
         val clientNameById = mappedClients.associate { it.id to it.name }
-
         val mappedTasks = mutableListOf<OperationalTask>()
         val mappedHistory = mutableListOf<ServiceHistoryItem>()
 
-        webOrders.forEachIndexed { idx, row ->
-            val oid = row["id"]?.toString().orEmpty()
-            val otCode = row["ot_number"]?.toString()?.takeIf { it.isNotBlank() }
-                ?: "OT-${(1000 + idx)}"
-            val cid = row["client_id"]?.toString().orEmpty()
-            val sid = row["sede_id"]?.toString().orEmpty()
+        for (idx in 0 until webOrders.length()) {
+            val row = webOrders.optJSONObject(idx) ?: continue
+            val oid = row.optCleanString("id")
+            val otCode = row.optCleanString("ot_number").ifBlank { "OT-${1000 + idx}" }
+            val cid = row.optCleanString("client_id")
+            val sid = row.optCleanString("sede_id")
             val sedeRow = sedeById[sid]
             val clientName = clientNameById[cid] ?: "Cliente Corporativo"
-            val sedeName = sedeRow?.get("name")?.toString().orEmpty()
-            val address = sedeRow?.get("address")?.toString().orEmpty()
-            val serviceType = row["service_type"]?.toString()?.takeIf { it.isNotBlank() }
-                ?: "Mantenimiento General"
-            val schedDate = row["scheduled_date"]?.toString().orEmpty()
-            val schedTime = row["scheduled_time"]?.toString()?.takeIf { it.isNotBlank() }
-                ?: "09:00 hs"
-            val status = mapStatusFromWeb(row["status"]?.toString())
-            val adminComments = row["admin_comments"]?.toString().orEmpty()
-            val techComments = row["tech_comments"]?.toString().orEmpty()
-            val checkIn = row["check_in_at"]?.toString()
-            val checkOut = row["check_out_at"]?.toString()
-            val rating = (row["client_rating"] as? Number)?.toInt()
-            val feedback = row["client_feedback"]?.toString().orEmpty()
+            val sedeName = sedeRow?.optCleanString("name").orEmpty()
+            val address = sedeRow?.optCleanString("address").orEmpty()
+            val serviceType = row.optCleanString("service_type").ifBlank { "Mantenimiento General" }
+            val schedDate = row.optCleanString("scheduled_date")
+            val schedTime = row.optCleanString("scheduled_time").ifBlank { "09:00 hs" }
+            val status = mapStatusFromWeb(row.optCleanString("status"))
+            val adminComments = row.optCleanString("admin_comments")
+            val techComments = row.optCleanString("tech_comments")
+            val checkIn = row.optCleanString("check_in_at").ifBlank { null }
+            val checkOut = row.optCleanString("check_out_at").ifBlank { null }
+            val rating = if (row.has("client_rating") && !row.isNull("client_rating")) row.optInt("client_rating") else null
+            val feedback = row.optCleanString("client_feedback")
 
-            @Suppress("UNCHECKED_CAST")
-            val techIds = (row["assigned_tech_ids"] as? List<Any?>)?.mapNotNull { it?.toString() } ?: emptyList()
+            val techIds = row.optStringList("assigned_tech_ids")
             val techNames = techIds.mapNotNull { profileNameById[it]?.takeIf { n -> n.isNotBlank() } }
             val mainTechName = techNames.firstOrNull() ?: "Equipo Técnico"
-
             val dayNum = schedDate.split("-").lastOrNull()?.toIntOrNull() ?: 1
 
             mappedTasks.add(
@@ -390,10 +381,8 @@ object SupabaseCloudSync {
             )
 
             if (status == TaskOperationStatus.FINALIZADA) {
-                @Suppress("UNCHECKED_CAST")
-                val beforePhotos = (row["photos_before"] as? List<Any?>)?.mapNotNull { it?.toString() } ?: emptyList()
-                @Suppress("UNCHECKED_CAST")
-                val afterPhotos = (row["photos_after"] as? List<Any?>)?.mapNotNull { it?.toString() } ?: emptyList()
+                val beforePhotos = row.optStringList("photos_before")
+                val afterPhotos = row.optStringList("photos_after")
                 mappedHistory.add(
                     ServiceHistoryItem(
                         id = oid,
@@ -419,32 +408,38 @@ object SupabaseCloudSync {
             }
         }
 
-        val finalTasks = if (webOrders.isNotEmpty()) mappedTasks else baseSnapshot?.operationalTasks.orEmpty()
+        val finalTasks = if (webOrders.length() > 0) mappedTasks else baseSnapshot?.operationalTasks.orEmpty()
         val finalHistory = if (mappedHistory.isNotEmpty()) mappedHistory else baseSnapshot?.serviceReports.orEmpty()
 
-        val mappedCatalog = if (webCatalog.isNotEmpty()) {
-            webCatalog.mapIndexed { idx, row ->
-                val sid = row["id"]?.toString().orEmpty()
-                val title = row["title"]?.toString().orEmpty()
-                MasterServiceCatalogItem(
-                    id = sid,
-                    code = "SRV-${(idx + 1).toString().padStart(2, '0')}",
-                    name = title,
-                    category = "Mantenimiento Integral",
-                    description = title,
-                    estimatedDurationHours = 2.0,
-                    dec406Compliant = true,
-                    basePriceUsd = 0.0
+        val mappedCatalog = if (webCatalog.length() > 0) {
+            val list = ArrayList<MasterServiceCatalogItem>(webCatalog.length())
+            for (idx in 0 until webCatalog.length()) {
+                val row = webCatalog.optJSONObject(idx) ?: continue
+                val sid = row.optCleanString("id")
+                val title = row.optCleanString("title")
+                list.add(
+                    MasterServiceCatalogItem(
+                        id = sid,
+                        code = "SRV-${(idx + 1).toString().padStart(2, '0')}",
+                        name = title,
+                        category = "Mantenimiento Integral",
+                        description = title,
+                        estimatedDurationHours = 2.0,
+                        dec406Compliant = true,
+                        basePriceUsd = 0.0
+                    )
                 )
             }
+            list
         } else {
             baseSnapshot?.masterServices.orEmpty()
         }
 
-        val mappedAnnouncements = if (webAnnouncements.isNotEmpty()) {
-            webAnnouncements.map { row ->
-                @Suppress("UNCHECKED_CAST")
-                val rawRoles = (row["target_roles"] as? List<Any?>)?.mapNotNull { it?.toString()?.lowercase(Locale.ROOT) } ?: emptyList()
+        val mappedAnnouncements = if (webAnnouncements.length() > 0) {
+            val list = ArrayList<AnnouncementItem>(webAnnouncements.length())
+            for (i in 0 until webAnnouncements.length()) {
+                val row = webAnnouncements.optJSONObject(i) ?: continue
+                val rawRoles = row.optStringList("target_roles").map { it.lowercase(Locale.ROOT) }
                 val targetRoles = mutableListOf<AnnouncementTargetRole>()
                 if (rawRoles.any { it.contains("limp") }) targetRoles.add(AnnouncementTargetRole.LIMPIEZA)
                 if (rawRoles.any { it.contains("tecn") }) targetRoles.add(AnnouncementTargetRole.TECNICOS)
@@ -452,16 +447,19 @@ object SupabaseCloudSync {
                 if (targetRoles.isEmpty()) {
                     targetRoles.addAll(listOf(AnnouncementTargetRole.TECNICOS, AnnouncementTargetRole.CLIENTES))
                 }
-                AnnouncementItem(
-                    id = row["id"]?.toString().orEmpty(),
-                    title = row["title"]?.toString().orEmpty(),
-                    body = row["body"]?.toString().orEmpty(),
-                    priority = mapPriorityFromWeb(row["priority"]?.toString()),
-                    targetRoles = targetRoles,
-                    imageUri = row["image_url"]?.toString(),
-                    createdAtLabel = row["created_at"]?.toString().orEmpty()
+                list.add(
+                    AnnouncementItem(
+                        id = row.optCleanString("id"),
+                        title = row.optCleanString("title"),
+                        body = row.optCleanString("body"),
+                        priority = mapPriorityFromWeb(row.optCleanString("priority")),
+                        targetRoles = targetRoles,
+                        imageUri = row.optCleanString("image_url").ifBlank { null },
+                        createdAtLabel = row.optCleanString("created_at")
+                    )
                 )
             }
+            list
         } else {
             baseSnapshot?.announcements.orEmpty()
         }
@@ -484,37 +482,41 @@ object SupabaseCloudSync {
             try { authAdapter.fromJson(fallbackJson) } catch (_: Exception) { null }
         } else null
 
-        val webProfiles = httpGetList("profiles?select=*&order=created_at.asc") ?: return fallbackJson
-        if (webProfiles.isEmpty()) return fallbackJson
+        val webProfiles = httpGetArray("profiles?select=*&order=created_at.asc") ?: return fallbackJson
+        if (webProfiles.length() == 0) return fallbackJson
 
         val existingUsersById = baseAuth?.users.orEmpty().associateBy { it.uid }
         val existingUsersByUsername = baseAuth?.users.orEmpty().associateBy { it.username.lowercase(Locale.ROOT) }
 
-        val mergedUsers = webProfiles.map { row ->
-            val id = row["id"]?.toString().orEmpty()
-            val username = row["username"]?.toString().orEmpty()
-            val fullName = row["full_name"]?.toString().orEmpty()
-            val role = mapRoleFromWeb(row["role"]?.toString())
-            val clientId = row["client_id"]?.toString()
-            val avatar = row["avatar_url"]?.toString()
-            val phone = row["phone"]?.toString().orEmpty()
-            val mustChange = (row["must_change_password"] as? Boolean) ?: false
-            val isActive = (row["is_active"] as? Boolean) ?: true
+        val mergedUsers = ArrayList<UserAccount>(webProfiles.length())
+        for (i in 0 until webProfiles.length()) {
+            val row = webProfiles.optJSONObject(i) ?: continue
+            val id = row.optCleanString("id")
+            val username = row.optCleanString("username")
+            val fullName = row.optCleanString("full_name")
+            val role = mapRoleFromWeb(row.optCleanString("role"))
+            val clientId = row.optCleanString("client_id").ifBlank { null }
+            val avatar = row.optCleanString("avatar_url").ifBlank { null }
+            val phone = row.optCleanString("phone")
+            val mustChange = row.optBoolean("must_change_password", false)
+            val isActive = row.optBoolean("is_active", true)
 
             val existing = existingUsersById[id] ?: existingUsersByUsername[username.lowercase(Locale.ROOT)]
-            UserAccount(
-                uid = existing?.uid ?: id,
-                username = username.ifBlank { existing?.username.orEmpty() },
-                email = existing?.email ?: if (username.contains("@")) username else "$username@todoservicio.com.uy",
-                fullName = fullName.ifBlank { existing?.fullName.orEmpty() },
-                phone = phone.ifBlank { existing?.phone.orEmpty() },
-                companyName = existing?.companyName.orEmpty(),
-                role = role,
-                clientId = clientId ?: existing?.clientId,
-                monthlyPlanId = existing?.monthlyPlanId,
-                isTemporaryPassword = mustChange,
-                isActive = isActive,
-                avatarUrl = avatar ?: existing?.avatarUrl
+            mergedUsers.add(
+                UserAccount(
+                    uid = existing?.uid ?: id,
+                    username = username.ifBlank { existing?.username.orEmpty() },
+                    email = existing?.email ?: if (username.contains("@")) username else "$username@todoservicio.com.uy",
+                    fullName = fullName.ifBlank { existing?.fullName.orEmpty() },
+                    phone = phone.ifBlank { existing?.phone.orEmpty() },
+                    companyName = existing?.companyName.orEmpty(),
+                    role = role,
+                    clientId = clientId ?: existing?.clientId,
+                    monthlyPlanId = existing?.monthlyPlanId,
+                    isTemporaryPassword = mustChange,
+                    isActive = isActive,
+                    avatarUrl = avatar ?: existing?.avatarUrl
+                )
             )
         }
 
@@ -549,60 +551,74 @@ object SupabaseCloudSync {
             try { cleaningAdapter.fromJson(fallbackJson) } catch (_: Exception) { null }
         } else null
 
-        val webSedes = httpGetList("sedes?select=*") ?: emptyList()
-        val webLogs = httpGetList("cleaning_logs?select=*&order=created_at.desc&limit=100") ?: emptyList()
-        val webProfiles = httpGetList("profiles?select=id,full_name") ?: emptyList()
+        val webSedes = httpGetArray("sedes?select=*") ?: JSONArray()
+        val webLogs = httpGetArray("cleaning_logs?select=*&order=created_at.desc&limit=100") ?: JSONArray()
+        val webProfiles = httpGetArray("profiles?select=id,full_name") ?: JSONArray()
 
-        if (webSedes.isEmpty() && webLogs.isEmpty()) return fallbackJson
+        if (webSedes.length() == 0 && webLogs.length() == 0) return fallbackJson
 
-        val profileNames = webProfiles.associate {
-            it["id"]?.toString().orEmpty() to it["full_name"]?.toString().orEmpty()
+        val profileNames = HashMap<String, String>()
+        for (i in 0 until webProfiles.length()) {
+            val row = webProfiles.optJSONObject(i) ?: continue
+            profileNames[row.optCleanString("id")] = row.optCleanString("full_name")
         }
-        val sedeMap = webSedes.associateBy { it["id"]?.toString().orEmpty() }
 
-        val buildings = if (webSedes.isNotEmpty()) {
-            webSedes.map { s ->
-                CleaningBuilding(
-                    id = s["id"]?.toString().orEmpty(),
-                    name = s["name"]?.toString().orEmpty(),
-                    address = s["address"]?.toString().orEmpty(),
-                    lat = (s["lat"] as? Number)?.toDouble() ?: -34.9011,
-                    lng = (s["lng"] as? Number)?.toDouble() ?: -56.1645,
-                    geofenceRadiusMeters = (s["geofence_radius_meters"] as? Number)?.toInt() ?: 100
+        val sedeMap = HashMap<String, JSONObject>()
+        val buildings = if (webSedes.length() > 0) {
+            val list = ArrayList<CleaningBuilding>(webSedes.length())
+            for (i in 0 until webSedes.length()) {
+                val s = webSedes.optJSONObject(i) ?: continue
+                val sid = s.optCleanString("id")
+                if (sid.isNotBlank()) sedeMap[sid] = s
+                list.add(
+                    CleaningBuilding(
+                        id = sid,
+                        name = s.optCleanString("name"),
+                        address = s.optCleanString("address"),
+                        lat = s.optDouble("lat", -34.9011),
+                        lng = s.optDouble("lng", -56.1645),
+                        geofenceRadiusMeters = s.optInt("geofence_radius_meters", 100)
+                    )
                 )
             }
+            list
         } else {
             baseCleaning?.buildingsList.orEmpty()
         }
 
-        val marks = if (webLogs.isNotEmpty()) {
-            webLogs.map { log ->
-                val uid = log["user_id"]?.toString().orEmpty()
-                val sid = log["sede_id"]?.toString().orEmpty()
+        val marks = if (webLogs.length() > 0) {
+            val list = ArrayList<CleaningAttendanceMark>(webLogs.length())
+            for (i in 0 until webLogs.length()) {
+                val log = webLogs.optJSONObject(i) ?: continue
+                val uid = log.optCleanString("user_id")
+                val sid = log.optCleanString("sede_id")
                 val sede = sedeMap[sid]
-                val evt = log["event_type"]?.toString().orEmpty().uppercase(Locale.ROOT)
+                val evt = log.optCleanString("event_type").uppercase(Locale.ROOT)
                 val markType = if (evt.startsWith("S") || evt.contains("OUT") || evt.contains("SAL")) "S" else "E"
-                val createdAt = log["created_at"]?.toString().orEmpty()
+                val createdAt = log.optCleanString("created_at")
                 val datePart = createdAt.substringBefore("T", "")
                 val timePart = createdAt.substringAfter("T", "").take(5)
 
-                CleaningAttendanceMark(
-                    id = log["id"]?.toString().orEmpty(),
-                    staffId = uid,
-                    staffName = profileNames[uid] ?: "Personal Limpieza",
-                    buildingName = sede?.get("name")?.toString() ?: "Sede Asignada",
-                    buildingAddress = sede?.get("address")?.toString().orEmpty(),
-                    date = datePart,
-                    markTime = timePart,
-                    markType = markType,
-                    lat = (log["lat"] as? Number)?.toDouble() ?: -34.9011,
-                    lng = (log["lng"] as? Number)?.toDouble() ?: -56.1645,
-                    isInsideGeofence = !((log["out_of_range"] as? Boolean) ?: false),
-                    distanceToBuildingMeters = (log["distance_meters"] as? Number)?.toInt() ?: 0,
-                    comment = log["comment"]?.toString().orEmpty(),
-                    isManualEntry = (log["is_manual"] as? Boolean) ?: false
+                list.add(
+                    CleaningAttendanceMark(
+                        id = log.optCleanString("id"),
+                        staffId = uid,
+                        staffName = profileNames[uid] ?: "Personal Limpieza",
+                        buildingName = sede?.optCleanString("name") ?: "Sede Asignada",
+                        buildingAddress = sede?.optCleanString("address").orEmpty(),
+                        date = datePart,
+                        markTime = timePart,
+                        markType = markType,
+                        lat = log.optDouble("lat", -34.9011),
+                        lng = log.optDouble("lng", -56.1645),
+                        isInsideGeofence = !log.optBoolean("out_of_range", false),
+                        distanceToBuildingMeters = log.optDouble("distance_meters", 0.0).toInt(),
+                        comment = log.optCleanString("comment"),
+                        isManualEntry = log.optBoolean("is_manual", false)
+                    )
                 )
             }
+            list
         } else {
             baseCleaning?.marksList.orEmpty()
         }
@@ -617,129 +633,142 @@ object SupabaseCloudSync {
     private fun pushOperationalToWebTables(jsonState: String) {
         val snap = try { operationalAdapter.fromJson(jsonState) } catch (_: Exception) { null } ?: return
 
-        val clientRows = mutableListOf>()
-        val sedeRows = mutableListOf>()
+        val clientArr = JSONArray()
+        val sedeArr = JSONArray()
 
         snap.corporateClients.forEach { client ->
             val clientUuid = ensureUuid(client.id)
-            clientRows.add(
-                mapOf(
-                    "id" to clientUuid,
-                    "name" to client.name,
-                    "logo_url" to client.logoUri,
-                    "plan_visits" to 8,
-                    "is_active" to true
-                )
+            clientArr.put(
+                JSONObject().apply {
+                    put("id", clientUuid)
+                    put("name", client.name)
+                    put("logo_url", client.logoUri ?: JSONObject.NULL)
+                    put("plan_visits", 8)
+                    put("is_active", true)
+                }
             )
             client.branches.forEach { branch ->
-                sedeRows.add(
-                    mapOf(
-                        "id" to ensureUuid(branch.id),
-                        "client_id" to clientUuid,
-                        "name" to branch.name,
-                        "address" to branch.address,
-                        "lat" to branch.lat,
-                        "lng" to branch.lng,
-                        "geofence_radius_meters" to branch.geofenceRadiusMeters,
-                        "contact_name" to branch.contactPerson,
-                        "contact_phone" to branch.phone
-                    )
+                sedeArr.put(
+                    JSONObject().apply {
+                        put("id", ensureUuid(branch.id))
+                        put("client_id", clientUuid)
+                        put("name", branch.name)
+                        put("address", branch.address)
+                        put("lat", branch.lat)
+                        put("lng", branch.lng)
+                        put("geofence_radius_meters", branch.geofenceRadiusMeters)
+                        put("contact_name", branch.contactPerson)
+                        put("contact_phone", branch.phone)
+                    }
                 )
             }
         }
-        httpUpsertRows("clients", clientRows)
-        httpUpsertRows("sedes", sedeRows)
+        httpUpsertArray("clients", clientArr)
+        httpUpsertArray("sedes", sedeArr)
 
-        val orderRows = snap.operationalTasks.map { task ->
-            val clientUuid = if (task.clientId.isNotBlank()) ensureUuid(task.clientId) else null
-            val sedeUuid = if (task.sedeId.isNotBlank()) ensureUuid(task.sedeId) else null
-            val techUuids = task.assignedTechIds.map { ensureUuid(it) }
-            mapOf(
-                "id" to ensureUuid(task.id),
-                "ot_number" to task.code,
-                "client_id" to clientUuid,
-                "sede_id" to sedeUuid,
-                "assigned_tech_ids" to techUuids,
-                "service_type" to task.title,
-                "scheduled_time" to task.timeSlot,
-                "status" to mapStatusToWeb(task.status),
-                "admin_comments" to task.description,
-                "tech_comments" to task.comments,
-                "client_rating" to task.clientRatingStars,
-                "client_feedback" to task.clientRatingComment
-            )
-        }
-        httpUpsertRows("work_orders", orderRows)
-
-        val catalogRows = snap.masterServices.map { srv ->
-            mapOf(
-                "id" to ensureUuid(srv.id),
-                "title" to srv.name,
-                "is_active" to true
-            )
-        }
-        httpUpsertRows("service_catalog", catalogRows)
-
-        val announcementRows = snap.announcements.map { ann ->
-            val roles = ann.targetRoles.map {
-                when (it) {
-                    AnnouncementTargetRole.LIMPIEZA -> "limpieza"
-                    AnnouncementTargetRole.TECNICOS -> "tecnico"
-                    AnnouncementTargetRole.CLIENTES -> "cliente"
+        val orderArr = JSONArray()
+        snap.operationalTasks.forEach { task ->
+            val techArr = JSONArray()
+            task.assignedTechIds.forEach { techArr.put(ensureUuid(it)) }
+            orderArr.put(
+                JSONObject().apply {
+                    put("id", ensureUuid(task.id))
+                    put("ot_number", task.code)
+                    put("client_id", if (task.clientId.isNotBlank()) ensureUuid(task.clientId) else JSONObject.NULL)
+                    put("sede_id", if (task.sedeId.isNotBlank()) ensureUuid(task.sedeId) else JSONObject.NULL)
+                    put("assigned_tech_ids", techArr)
+                    put("service_type", task.title)
+                    put("scheduled_time", task.timeSlot)
+                    put("status", mapStatusToWeb(task.status))
+                    put("admin_comments", task.description)
+                    put("tech_comments", task.comments)
+                    put("client_rating", task.clientRatingStars ?: JSONObject.NULL)
+                    put("client_feedback", task.clientRatingComment)
                 }
-            }
-            mapOf(
-                "id" to ensureUuid(ann.id),
-                "title" to ann.title,
-                "body" to ann.body,
-                "image_url" to ann.imageUri,
-                "priority" to mapPriorityToWeb(ann.priority),
-                "target_roles" to roles
             )
         }
-        httpUpsertRows("announcements", announcementRows)
+        httpUpsertArray("work_orders", orderArr)
+
+        val catalogArr = JSONArray()
+        snap.masterServices.forEach { srv ->
+            catalogArr.put(
+                JSONObject().apply {
+                    put("id", ensureUuid(srv.id))
+                    put("title", srv.name)
+                    put("is_active", true)
+                }
+            )
+        }
+        httpUpsertArray("service_catalog", catalogArr)
+
+        val annArr = JSONArray()
+        snap.announcements.forEach { ann ->
+            val rolesArr = JSONArray()
+            ann.targetRoles.forEach {
+                rolesArr.put(
+                    when (it) {
+                        AnnouncementTargetRole.LIMPIEZA -> "limpieza"
+                        AnnouncementTargetRole.TECNICOS -> "tecnico"
+                        AnnouncementTargetRole.CLIENTES -> "cliente"
+                    }
+                )
+            }
+            annArr.put(
+                JSONObject().apply {
+                    put("id", ensureUuid(ann.id))
+                    put("title", ann.title)
+                    put("body", ann.body)
+                    put("image_url", ann.imageUri ?: JSONObject.NULL)
+                    put("priority", mapPriorityToWeb(ann.priority))
+                    put("target_roles", rolesArr)
+                }
+            )
+        }
+        httpUpsertArray("announcements", annArr)
     }
 
     private fun pushAuthToWebTables(jsonState: String) {
         val snap = try { authAdapter.fromJson(jsonState) } catch (_: Exception) { null } ?: return
-        val profileRows = snap.users.map { user ->
-            mapOf(
-                "id" to ensureUuid(user.uid),
-                "username" to user.username,
-                "full_name" to user.fullName,
-                "role" to mapRoleToWeb(user.role),
-                "client_id" to user.clientId?.takeIf { it.isNotBlank() }?.let { ensureUuid(it) },
-                "avatar_url" to user.avatarUrl,
-                "phone" to user.phone,
-                "must_change_password" to user.isTemporaryPassword,
-                "is_active" to user.isActive
+        val profileArr = JSONArray()
+        snap.users.forEach { user ->
+            profileArr.put(
+                JSONObject().apply {
+                    put("id", ensureUuid(user.uid))
+                    put("username", user.username)
+                    put("full_name", user.fullName)
+                    put("role", mapRoleToWeb(user.role))
+                    put("client_id", user.clientId?.takeIf { it.isNotBlank() }?.let { ensureUuid(it) } ?: JSONObject.NULL)
+                    put("avatar_url", user.avatarUrl ?: JSONObject.NULL)
+                    put("phone", user.phone)
+                    put("must_change_password", user.isTemporaryPassword)
+                    put("is_active", user.isActive)
+                }
             )
         }
-        httpUpsertRows("profiles", profileRows)
+        httpUpsertArray("profiles", profileArr)
     }
 
     private fun pushCleaningToWebTables(jsonState: String) {
         val snap = try { cleaningAdapter.fromJson(jsonState) } catch (_: Exception) { null } ?: return
-        val logRows = snap.marksList.map { mark ->
-            mapOf(
-                "id" to ensureUuid(mark.id),
-                "user_id" to if (mark.staffId.isNotBlank()) ensureUuid(mark.staffId) else null,
-                "event_type" to if (mark.markType == "S") "salida" else "entrada",
-                "is_manual" to mark.isManualEntry,
-                "lat" to mark.lat,
-                "lng" to mark.lng,
-                "distance_meters" to mark.distanceToBuildingMeters.toDouble(),
-                "out_of_range" to !mark.isInsideGeofence,
-                "comment" to mark.comment
+        val logArr = JSONArray()
+        snap.marksList.forEach { mark ->
+            logArr.put(
+                JSONObject().apply {
+                    put("id", ensureUuid(mark.id))
+                    put("user_id", if (mark.staffId.isNotBlank()) ensureUuid(mark.staffId) else JSONObject.NULL)
+                    put("event_type", if (mark.markType == "S") "salida" else "entrada")
+                    put("is_manual", mark.isManualEntry)
+                    put("lat", mark.lat)
+                    put("lng", mark.lng)
+                    put("distance_meters", mark.distanceToBuildingMeters.toDouble())
+                    put("out_of_range", !mark.isInsideGeofence)
+                    put("comment", mark.comment)
+                }
             )
         }
-        httpUpsertRows("cleaning_logs", logRows)
+        httpUpsertArray("cleaning_logs", logArr)
     }
 
-    /**
-     * Sondea Supabase cada 5 segundos para reflejar en vivo en el celular cualquier
-     * cliente, sede, orden, perfil o aviso creado desde el panel web en Vercel.
-     */
     fun startLiveSync(
         onOperationalUpdated: () -> Unit,
         onAuthUpdated: () -> Unit,
