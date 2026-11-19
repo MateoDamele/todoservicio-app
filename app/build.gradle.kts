@@ -21,12 +21,12 @@ android {
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-    val envProps = java.util.Properties().apply {
-      val f = rootProject.file(".env")
-      if (f.exists()) f.inputStream().use { load(it) }
-    }
-    val supaUrl = (envProps.getProperty("SUPABASE_URL") ?: System.getenv("SUPABASE_URL") ?: "").trim().trim('"')
-    val supaKey = (envProps.getProperty("SUPABASE_ANON_KEY") ?: System.getenv("SUPABASE_ANON_KEY") ?: "").trim().trim('"')
+    val envFile = rootProject.file(".env")
+    val envLines = if (envFile.exists()) envFile.readLines() else emptyList()
+    val fileUrl = envLines.firstOrNull { it.startsWith("SUPABASE_URL=") }?.substringAfter("=")?.trim()?.trim('"')
+    val fileKey = envLines.firstOrNull { it.startsWith("SUPABASE_ANON_KEY=") }?.substringAfter("=")?.trim()?.trim('"')
+    val supaUrl = (fileUrl?.takeIf { it.isNotEmpty() } ?: System.getenv("SUPABASE_URL") ?: "").trim().trim('"')
+    val supaKey = (fileKey?.takeIf { it.isNotEmpty() } ?: System.getenv("SUPABASE_ANON_KEY") ?: "").trim().trim('"')
     buildConfigField("String", "SUPABASE_URL", "\"$supaUrl\"")
     buildConfigField("String", "SUPABASE_ANON_KEY", "\"$supaKey\"")
   }
